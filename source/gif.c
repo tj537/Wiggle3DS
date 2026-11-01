@@ -3,35 +3,184 @@
 #include <string.h>
 #include "gif.h"
 
-#define LEVELS_R 6
-#define LEVELS_G 7
-#define LEVELS_B 6
 #define CLEAR_CODE 256
 #define EOI_CODE 257
 #define MAX_CODES 4096
+#define PAL_SIZE 256
+#define KMEANS_ROUNDS 3
 
-static const u8 bayer[4][4] = {
-	{0, 8, 2, 10},
-	{12, 4, 14, 6},
-	{3, 11, 1, 9},
-	{15, 7, 13, 5},
-};
+// Adaptive palette: median cut over the RGB565 histogram of all frames,
+// refined with a few k-means rounds. Sources are RGB565, so a 64K lookup
+// table maps every pixel exactly to its nearest palette entry.
+typedef struct
+{
+	u8 c[3];
+	u16 key;
+	u32 n;
+} Color;
 
-static inline int quant(int v, int levels, int t) { return (v * (levels - 1) + t) / 255; }
+typedef struct
+{
+	int start, end, channel;
+	u64 score;
+} Box;
 
-static void quantize(u8 *dst, const GifFrame *f, int w, int h)
+static u32 hist[65536];
+static Color colors[65536];
+static u8 lut[65536];
+static u8 pal[PAL_SIZE][3];
+static int palCount;
+static int sortChannel;
+
+// Rough perceptual weights for r, g, b.
+static const int weight[3] = {3, 4, 2};
+
+static int cmpColor(const void *a, const void *b)
+{
+	return ((const Color *)a)->c[sortChannel] - ((const Color *)b)->c[sortChannel];
+}
+
+static void boxStats(Box *b)
+{
+	int lo[3] = {255, 255, 255}, hi[3] = {0, 0, 0};
+	u64 n = 0;
+	for (int i = b->start; i < b->end; i++)
+	{
+		for (int k = 0; k < 3; k++)
+		{
+			if (colors[i].c[k] < lo[k]) lo[k] = colors[i].c[k];
+			if (colors[i].c[k] > hi[k]) hi[k] = colors[i].c[k];
+		}
+		n += colors[i].n;
+	}
+	b->channel = 0;
+	int best = -1;
+	for (int k = 0; k < 3; k++)
+	{
+		int r = (hi[k] - lo[k]) * weight[k];
+		if (r > best)
+		{
+			best = r;
+			b->channel = k;
+		}
+	}
+	b->score = b->end - b->start > 1 ? n * (u64)best * best : 0;
+}
+
+static int nearest(const u8 *c)
+{
+	int best = 0;
+	u32 bestDist = 0xFFFFFFFF;
+	for (int i = 0; i < palCount; i++)
+	{
+		int dr = c[0] - pal[i][0], dg = c[1] - pal[i][1], db = c[2] - pal[i][2];
+		u32 d = weight[0] * dr * dr + weight[1] * dg * dg + weight[2] * db * db;
+		if (d < bestDist)
+		{
+			bestDist = d;
+			best = i;
+		}
+	}
+	return best;
+}
+
+static void buildPalette(const GifFrame *frames, int count, int w, int h)
+{
+	memset(hist, 0, sizeof(hist));
+	for (int i = 0; i < count; i++)
+		for (int y = 0; y < h; y++)
+		{
+			const u16 *row = frames[i].img + (frames[i].y + y) * frames[i].stride + frames[i].x;
+			for (int x = 0; x < w; x++)
+				hist[row[x]]++;
+		}
+
+	int n = 0;
+	for (int k = 0; k < 65536; k++)
+		if (hist[k])
+		{
+			int r5 = k >> 11, g6 = (k >> 5) & 0x3F, b5 = k & 0x1F;
+			colors[n] = (Color){{(r5 << 3) | (r5 >> 2), (g6 << 2) | (g6 >> 4), (b5 << 3) | (b5 >> 2)}, k, hist[k]};
+			n++;
+		}
+
+	static Box boxes[PAL_SIZE];
+	int boxCount = 1;
+	boxes[0] = (Box){0, n, 0, 0};
+	boxStats(&boxes[0]);
+	while (boxCount < PAL_SIZE)
+	{
+		int bi = 0;
+		for (int i = 1; i < boxCount; i++)
+			if (boxes[i].score > boxes[bi].score)
+				bi = i;
+		Box *b = &boxes[bi];
+		if (!b->score)
+			break;
+
+		// Split at the weighted median of the widest channel.
+		sortChannel = b->channel;
+		qsort(colors + b->start, b->end - b->start, sizeof(Color), cmpColor);
+		u64 total = 0, acc = 0;
+		for (int i = b->start; i < b->end; i++)
+			total += colors[i].n;
+		int split = b->start + 1;
+		for (int i = b->start; i < b->end - 1; i++)
+		{
+			acc += colors[i].n;
+			split = i + 1;
+			if (acc * 2 >= total)
+				break;
+		}
+		boxes[boxCount] = (Box){split, b->end, 0, 0};
+		b->end = split;
+		boxStats(b);
+		boxStats(&boxes[boxCount]);
+		boxCount++;
+	}
+
+	palCount = boxCount;
+	for (int i = 0; i < boxCount; i++)
+	{
+		u64 sum[3] = {0, 0, 0}, total = 0;
+		for (int j = boxes[i].start; j < boxes[i].end; j++)
+		{
+			for (int k = 0; k < 3; k++)
+				sum[k] += (u64)colors[j].c[k] * colors[j].n;
+			total += colors[j].n;
+		}
+		for (int k = 0; k < 3; k++)
+			pal[i][k] = total ? (sum[k] + total / 2) / total : 0;
+	}
+
+	for (int round = 0; round < KMEANS_ROUNDS; round++)
+	{
+		static u64 sums[PAL_SIZE][4];
+		memset(sums, 0, sizeof(sums));
+		for (int j = 0; j < n; j++)
+		{
+			int i = nearest(colors[j].c);
+			for (int k = 0; k < 3; k++)
+				sums[i][k] += (u64)colors[j].c[k] * colors[j].n;
+			sums[i][3] += colors[j].n;
+		}
+		for (int i = 0; i < palCount; i++)
+			if (sums[i][3])
+				for (int k = 0; k < 3; k++)
+					pal[i][k] = (sums[i][k] + sums[i][3] / 2) / sums[i][3];
+	}
+
+	for (int j = 0; j < n; j++)
+		lut[colors[j].key] = nearest(colors[j].c);
+}
+
+static void mapFrame(u8 *dst, const GifFrame *f, int w, int h)
 {
 	for (int y = 0; y < h; y++)
 	{
 		const u16 *row = f->img + (f->y + y) * f->stride + f->x;
 		for (int x = 0; x < w; x++)
-		{
-			u16 p = row[x];
-			int r5 = p >> 11, g6 = (p >> 5) & 0x3F, b5 = p & 0x1F;
-			int r = (r5 << 3) | (r5 >> 2), g = (g6 << 2) | (g6 >> 4), b = (b5 << 3) | (b5 >> 2);
-			int t = (bayer[y & 3][x & 3] * 2 + 1) * 255 / 32;
-			*dst++ = quant(r, LEVELS_R, t) * LEVELS_G * LEVELS_B + quant(g, LEVELS_G, t) * LEVELS_B + quant(b, LEVELS_B, t);
-		}
+			*dst++ = lut[row[x]];
 	}
 }
 
@@ -124,6 +273,7 @@ bool gifWrite(const char *path, const GifFrame *frames, int count, int w, int h,
 	if (ok)
 	{
 		setvbuf(f, NULL, _IOFBF, 64 * 1024);
+		buildPalette(frames, count, w, h);
 		fwrite("GIF89a", 1, 6, f);
 		put16(f, w);
 		put16(f, h);
@@ -131,13 +281,8 @@ bool gifWrite(const char *path, const GifFrame *frames, int count, int w, int h,
 		fputc(0, f);
 		fputc(0, f);
 		for (int i = 0; i < 256; i++)
-		{
-			int r = i / (LEVELS_G * LEVELS_B), g = i / LEVELS_B % LEVELS_G, b = i % LEVELS_B;
-			bool used = i < LEVELS_R * LEVELS_G * LEVELS_B;
-			fputc(used ? r * 255 / (LEVELS_R - 1) : 0, f);
-			fputc(used ? g * 255 / (LEVELS_G - 1) : 0, f);
-			fputc(used ? b * 255 / (LEVELS_B - 1) : 0, f);
-		}
+			for (int k = 0; k < 3; k++)
+				fputc(i < palCount ? pal[i][k] : 0, f);
 		// Loop forever.
 		fwrite("\x21\xFF\x0BNETSCAPE2.0\x03\x01\x00\x00\x00", 1, 19, f);
 
@@ -154,7 +299,7 @@ bool gifWrite(const char *path, const GifFrame *frames, int count, int w, int h,
 			put16(f, h);
 			fputc(0, f);
 			fputc(8, f); // LZW minimum code size
-			quantize(pix, &frames[i], w, h);
+			mapFrame(pix, &frames[i], w, h);
 			lzwEncode(f, pix, w * h, dict);
 		}
 		fputc(0x3B, f);

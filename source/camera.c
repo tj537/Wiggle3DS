@@ -26,9 +26,9 @@ bool camOpen(void)
 	if (!buf || R_FAILED(camInit()))
 		return false;
 
-	CAMU_SetSize(SELECT_OUT1_OUT2, SIZE_CTR_TOP_LCD, CONTEXT_A);
+	CAMU_SetSize(SELECT_OUT1_OUT2, SIZE_VGA, CONTEXT_A);
 	CAMU_SetOutputFormat(SELECT_OUT1_OUT2, OUTPUT_RGB_565, CONTEXT_A);
-	CAMU_SetFrameRate(SELECT_OUT1_OUT2, FRAME_RATE_30);
+	CAMU_SetFrameRate(SELECT_OUT1_OUT2, FRAME_RATE_30_TO_10);
 	CAMU_SetNoiseFilter(SELECT_OUT1_OUT2, true);
 	CAMU_SetAutoExposure(SELECT_OUT1_OUT2, true);
 	CAMU_SetAutoWhiteBalance(SELECT_OUT1_OUT2, true);

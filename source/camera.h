@@ -1,10 +1,10 @@
 #pragma once
 #include <3ds/types.h>
 
-#define CAM_W 400
-#define CAM_H 240
+#define CAM_W 640
+#define CAM_H 480
 
-// Both outer cameras, streamed as RGB565 at 400x240.
+// Both outer cameras, streamed as RGB565 at 640x480 (VGA).
 bool camOpen(void);
 void camResume(void);
 void camPause(void);

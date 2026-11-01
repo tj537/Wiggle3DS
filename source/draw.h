@@ -13,8 +13,8 @@ void drawCross(u16 *fb, int sw, int x, int y, int size, u16 color);
 
 // Copy a w*h region starting at (sx, sy) of a row-major image to (dx, dy).
 void drawImage(u16 *fb, int sw, int dx, int dy, const u16 *img, int stride, int sx, int sy, int w, int h);
-// Nearest-neighbour scale a whole iw*ih image into a dw*dh box at (dx, dy).
-void drawImageScaled(u16 *fb, int sw, int dx, int dy, int dw, int dh, const u16 *img, int iw, int ih);
+// Nearest-neighbour scale the w*h region at (sx, sy) into a dw*dh box at (dx, dy).
+void drawImageScaled(u16 *fb, int sw, int dx, int dy, int dw, int dh, const u16 *img, int stride, int sx, int sy, int w, int h);
 
 // 8x8 text using the libctru console font.
 void drawText(u16 *fb, int sw, int x, int y, u16 color, const char *fmt, ...);

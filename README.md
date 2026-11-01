@@ -8,7 +8,18 @@ Homebrew-App für den New 3DS (XL): Sie nimmt ein 3D-Foto mit beiden Außenkamer
 2. Zwischenbilder aus einer Tiefenschätzung berechnen, damit die Kamerafahrt flüssig wird.
 3. Filter, Icon und Banner.
 
-Aktueller Stand: Schritt 1 (3D-Live-Vorschau, Drehpunkt per Touch, Wiggle-Vorschau, GIF-Export nach `sdmc:/Wiggle3DS/`).
+Aktueller Stand: Schritt 1 ist fertig. Die App nimmt in 640x480 auf, und jedes GIF bekommt eine eigene Palette, die aus seinen Farben berechnet wird. Dazu gibt es eine Galerie.
+
+## Bedienung
+
+- **Kamera:** A, L oder R macht ein Foto, Y öffnet die Galerie, START beendet die App.
+- **Bearbeiten:** Tipp auf den Drehpunkt, mit ◀/▶ justierst du fein, mit ▲/▼ stellst du das Tempo ein. A speichert, B geht zurück.
+- **Galerie:** Mit dem Steuerkreuz oder per Touch wählst du eine Aufnahme aus. A öffnet sie, zweimal X löscht sie, B bringt dich zur Kamera.
+
+## Dateien auf der SD-Karte
+
+- `Wiggle3DS/GIF/WIG_0001.gif`: die fertigen Wigglegrams
+- `Wiggle3DS/Fotos/WIG_0001.w3d`: das 3D-Foto mit seinen Einstellungen, damit du es später in der Galerie neu bearbeiten kannst
 
 ## Bauen
 

@@ -2,11 +2,17 @@
 #include "camera.h"
 #include "wiggle.h"
 
+// Matching runs coarse-to-fine: a wide search on half-size images, then a
+// small refinement at full size.
+#define HALF_W (CAM_W / 2)
+#define HALF_H (CAM_H / 2)
 #define PATCH 12   // patch radius: 25x25 pixels
-#define SEARCH_X 64
+#define SEARCH_X 64 // in half-size pixels
 #define SEARCH_Y 8
+#define REFINE 2
 
 static u8 lumaL[CAM_W * CAM_H], lumaR[CAM_W * CAM_H];
+static u8 halfL[HALF_W * HALF_H], halfR[HALF_W * HALF_H];
 
 static void toLuma(u8 *dst, const u16 *src)
 {
@@ -18,39 +24,52 @@ static void toLuma(u8 *dst, const u16 *src)
 	}
 }
 
+static void toHalf(u8 *dst, const u8 *src)
+{
+	for (int y = 0; y < HALF_H; y++)
+		for (int x = 0; x < HALF_W; x++)
+		{
+			const u8 *s = src + y * 2 * CAM_W + x * 2;
+			dst[y * HALF_W + x] = (s[0] + s[1] + s[CAM_W] + s[CAM_W + 1] + 2) >> 2;
+		}
+}
+
 void wiggleSetImages(const u16 *left, const u16 *right)
 {
 	toLuma(lumaL, left);
 	toLuma(lumaR, right);
+	toHalf(halfL, lumaL);
+	toHalf(halfR, lumaR);
 }
 
-Offset wiggleMatch(int px, int py)
+static int clampi(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+// Best offset of the patch around (px, py) of `a` within the given search box of `b`.
+static Offset search(const u8 *a, const u8 *b, int w, int h, int px, int py,
+                     int x0, int x1, int y0, int y1)
 {
-	// Keep the patch inside the left image.
-	if (px < PATCH) px = PATCH;
-	if (py < PATCH) py = PATCH;
-	if (px > CAM_W - 1 - PATCH) px = CAM_W - 1 - PATCH;
-	if (py > CAM_H - 1 - PATCH) py = CAM_H - 1 - PATCH;
+	px = clampi(px, PATCH, w - 1 - PATCH);
+	py = clampi(py, PATCH, h - 1 - PATCH);
 
 	Offset best = {0, 0};
 	u32 bestSad = 0xFFFFFFFF;
-	for (int dy = -SEARCH_Y; dy <= SEARCH_Y; dy++)
+	for (int dy = y0; dy <= y1; dy++)
 	{
 		int ry = py + dy;
-		if (ry < PATCH || ry > CAM_H - 1 - PATCH)
+		if (ry < PATCH || ry > h - 1 - PATCH)
 			continue;
-		for (int dx = -SEARCH_X; dx <= SEARCH_X; dx++)
+		for (int dx = x0; dx <= x1; dx++)
 		{
 			int rx = px + dx;
-			if (rx < PATCH || rx > CAM_W - 1 - PATCH)
+			if (rx < PATCH || rx > w - 1 - PATCH)
 				continue;
 			u32 sad = 0;
 			for (int y = -PATCH; y <= PATCH && sad < bestSad; y++)
 			{
-				const u8 *a = lumaL + (py + y) * CAM_W + px - PATCH;
-				const u8 *b = lumaR + (ry + y) * CAM_W + rx - PATCH;
+				const u8 *pa = a + (py + y) * w + px - PATCH;
+				const u8 *pb = b + (ry + y) * w + rx - PATCH;
 				for (int x = 0; x <= 2 * PATCH; x++)
-					sad += abs(a[x] - b[x]);
+					sad += abs(pa[x] - pb[x]);
 			}
 			// Prefer small shifts on ties (flat areas).
 			if (sad < bestSad || (sad == bestSad && abs(dx) + abs(dy) < abs(best.dx) + abs(best.dy)))
@@ -62,6 +81,13 @@ Offset wiggleMatch(int px, int py)
 		}
 	}
 	return best;
+}
+
+Offset wiggleMatch(int px, int py)
+{
+	Offset c = search(halfL, halfR, HALF_W, HALF_H, px / 2, py / 2, -SEARCH_X, SEARCH_X, -SEARCH_Y, SEARCH_Y);
+	return search(lumaL, lumaR, CAM_W, CAM_H, px, py,
+	              c.dx * 2 - REFINE, c.dx * 2 + REFINE, c.dy * 2 - REFINE, c.dy * 2 + REFINE);
 }
 
 Crop wiggleCrop(Offset o)

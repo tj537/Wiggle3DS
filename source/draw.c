@@ -53,13 +53,13 @@ void drawImage(u16 *fb, int sw, int dx, int dy, const u16 *img, int stride, int 
 	}
 }
 
-void drawImageScaled(u16 *fb, int sw, int dx, int dy, int dw, int dh, const u16 *img, int iw, int ih)
+void drawImageScaled(u16 *fb, int sw, int dx, int dy, int dw, int dh, const u16 *img, int stride, int sx, int sy, int w, int h)
 {
 	for (int x = 0; x < dw; x++)
 	{
-		int sx = x * iw / dw;
+		const u16 *src = img + sy * stride + sx + x * w / dw;
 		for (int y = 0; y < dh; y++)
-			put(fb, sw, dx + x, dy + y, img[(y * ih / dh) * iw + sx]);
+			put(fb, sw, dx + x, dy + y, src[(y * h / dh) * stride]);
 	}
 }
 

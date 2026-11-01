@@ -8,5 +8,5 @@ typedef struct
 	int stride, x, y;
 } GifFrame;
 
-// Writes a looping GIF with a fixed 6x7x6 palette and ordered dithering.
+// Writes a looping GIF; all frames share one palette fitted to their colors.
 bool gifWrite(const char *path, const GifFrame *frames, int count, int w, int h, int delayMs);
