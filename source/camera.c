@@ -3,7 +3,6 @@
 #include "camera.h"
 
 #define FRAME_BYTES (CAM_W * CAM_H * 2)
-#define WAIT_TIMEOUT 1000000000ULL
 
 static u16 *buf;
 static u32 transferUnit;
@@ -28,7 +27,7 @@ bool camOpen(void)
 
 	CAMU_SetSize(SELECT_OUT1_OUT2, SIZE_VGA, CONTEXT_A);
 	CAMU_SetOutputFormat(SELECT_OUT1_OUT2, OUTPUT_RGB_565, CONTEXT_A);
-	CAMU_SetFrameRate(SELECT_OUT1_OUT2, FRAME_RATE_30_TO_10);
+	CAMU_SetFrameRate(SELECT_OUT1_OUT2, FRAME_RATE_15);
 	CAMU_SetNoiseFilter(SELECT_OUT1_OUT2, true);
 	CAMU_SetAutoExposure(SELECT_OUT1_OUT2, true);
 	CAMU_SetAutoWhiteBalance(SELECT_OUT1_OUT2, true);
@@ -91,7 +90,7 @@ bool camPoll(void)
 	}
 
 	s32 index = -1;
-	svcWaitSynchronizationN(&index, events, 4, false, WAIT_TIMEOUT);
+	svcWaitSynchronizationN(&index, events, 4, false, 0); // don't block the UI
 	switch (index)
 	{
 	case 0:

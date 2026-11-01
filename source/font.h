@@ -19,4 +19,4 @@ typedef struct
 	int ascent, descent;
 } Font;
 
-extern const Font fontSmall, fontBody, fontTitle, fontHuge;
+extern const Font fontSmall, fontBody, fontTitle;

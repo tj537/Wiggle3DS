@@ -91,9 +91,8 @@ static void buildPalette(const GifFrame *frames, int count, int w, int h)
 		for (int y = 0; y < h; y++)
 		{
 			const u16 *row = frames[i].img + (frames[i].y + y) * frames[i].stride + frames[i].x;
-			const u16 *recolor = frames[i].lut;
 			for (int x = 0; x < w; x++)
-				hist[recolor ? recolor[row[x]] : row[x]]++;
+				hist[row[x]]++;
 		}
 
 	int n = 0;
@@ -181,7 +180,7 @@ static void mapFrame(u8 *dst, const GifFrame *f, int w, int h)
 	{
 		const u16 *row = f->img + (f->y + y) * f->stride + f->x;
 		for (int x = 0; x < w; x++)
-			*dst++ = lut[f->lut ? f->lut[row[x]] : row[x]];
+			*dst++ = lut[row[x]];
 	}
 }
 

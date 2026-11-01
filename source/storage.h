@@ -2,11 +2,12 @@
 #include <stddef.h>
 #include <3ds/types.h>
 
-// sdmc:/Wiggle3DS/GIF/WIG_0001.gif    finished wigglegram
-// sdmc:/Wiggle3DS/Fotos/WIG_0001.w3d  stereo pair + settings, for the gallery
+// sdmc:/Wiggle3DS/GIF/WIG_0001.gif     finished wigglegram
+// sdmc:/Wiggle3DS/Photos/WIG_0001.w3d  stereo pair + settings, for the gallery
 #define DIR_ROOT "sdmc:/Wiggle3DS"
 #define DIR_GIF DIR_ROOT "/GIF"
-#define DIR_PHOTO DIR_ROOT "/Fotos"
+#define DIR_PHOTO DIR_ROOT "/Photos"
+#define DIR_PHOTO_OLD DIR_ROOT "/Fotos" // name used by earlier versions
 
 // Aligned crops, downscaled: a small one for the grid, a screen-sized one
 // for the top screen preview (both eyes).
@@ -17,7 +18,8 @@
 
 typedef struct
 {
-	s32 pivotX, pivotY, dx, dy, delayMs, filter;
+	s32 pivotX, pivotY, dx, dy, delayMs;
+	s32 reserved; // was the color filter
 } ShotInfo;
 
 void storageInit(void);

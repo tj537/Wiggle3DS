@@ -32,6 +32,7 @@ void storageGifPath(int num, char *buf, size_t size)
 void storageInit(void)
 {
 	mkdir(DIR_ROOT, 0777);
+	rename(DIR_PHOTO_OLD, DIR_PHOTO); // fails harmlessly if there is nothing to move
 	mkdir(DIR_GIF, 0777);
 	mkdir(DIR_PHOTO, 0777);
 }

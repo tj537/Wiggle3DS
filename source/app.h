@@ -8,9 +8,8 @@
 
 typedef enum
 {
-	MODE_CAMERA,
-	MODE_REVIEW,
-	MODE_GALLERY,
+	MODE_HOME,   // top: live view or the selected shot, bottom: gallery
+	MODE_REVIEW, // edit pivot and speed, save
 } Mode;
 
 #define MAX_SHOTS 1000
@@ -20,19 +19,15 @@ typedef enum
 
 // ---- bottom screen layout, used for drawing and touch ----
 
-// Camera
-#define SHUTTER_X 160
-#define SHUTTER_Y 100
-#define SHUTTER_R 34
-#define GALLERY_BTN_X 30 // 52x52 rounded square
-#define GALLERY_BTN_Y 74
-#define GALLERY_BTN_S 52
-#define FILTER_BTN_X 264 // circle
-#define FILTER_BTN_Y 100
-#define FILTER_BTN_R 26
-#define CHIPS_Y 168
-#define CHIP_H 26
-#define CHIP_GAP 6
+// Home: gallery grid
+#define GRID_COLS 4
+#define GRID_ROWS 3
+#define GRID_PAGE (GRID_COLS * GRID_ROWS)
+#define GRID_X 11
+#define GRID_Y 40
+#define CELL_W 70
+#define CELL_H 52
+#define CELL_GAP 6
 
 // Review
 #define CARD_X 48
@@ -44,36 +39,22 @@ typedef enum
 #define SLIDER_Y 192
 #define BTN_Y 210
 #define BTN_H 24
-
-// Gallery
-#define GRID_COLS 4
-#define GRID_ROWS 3
-#define GRID_PAGE (GRID_COLS * GRID_ROWS)
-#define GRID_X 11
-#define GRID_Y 40
-#define CELL_W 70
-#define CELL_H 52
-#define CELL_GAP 6
+#define BACK_X 12
+#define BACK_W 100
+#define SAVE_X 120
+#define SAVE_W 188
 
 typedef struct
 {
-	Mode mode, reviewReturn;
-	u64 now, modeSince;
-	int filter; // current filter in the camera and the shot being reviewed
+	Mode mode;
+	u64 now, modeSince, flashAt;
 
-	// Camera
-	bool camOk, shutterHeld;
+	// Home: `browsing` shows the selected shot on top instead of the camera.
+	bool browsing, playing;
+	bool camOk;
 	const u16 *liveL, *liveR;
-	float chipScroll; // animated carousel offset
-	u64 filterChangedAt;
 
-	// Review: shotNum is -1 until the shot has been saved once.
-	u16 *shotL, *shotR;
-	int shotNum, pivotX, pivotY, delayMs;
-	Offset offset;
-	bool saving;
-
-	// Gallery: grid thumbnails for the visible page, preview of the selection.
+	// Gallery grid for the visible page, preview of the selection.
 	int shots[MAX_SHOTS], shotCount, sel, gridPage;
 	u16 grid[GRID_PAGE][THUMB_W * THUMB_H];
 	ShotInfo gridInfo[GRID_PAGE];
@@ -82,9 +63,11 @@ typedef struct
 	int previewNum; // shot the preview belongs to, -1 if none
 	bool confirmDelete;
 
-	// Newest shot, shown on the camera's gallery button.
-	u16 lastThumb[THUMB_W * THUMB_H];
-	bool lastThumbOk;
+	// Review: shotNum is -1 until the shot has been saved once.
+	u16 *shotL, *shotR;
+	int shotNum, pivotX, pivotY, delayMs;
+	Offset offset;
+	bool saving, fromGallery;
 
 	// Toast message at the top of the bottom screen.
 	char toast[64];
@@ -92,9 +75,15 @@ typedef struct
 	u64 toastAt;
 } App;
 
-void uiDraw(App *a, u16 *topL, u16 *topR, u16 *bottom, bool stereo);
-// Touch targets. uiChipAt returns a filter index or -1.
-int uiChipAt(const App *a, int x, int y);
-typedef enum { HIT_NONE, HIT_BACK, HIT_FILTER_PREV, HIT_FILTER_NEXT, HIT_SAVE, HIT_CANCEL, HIT_DELETE } Hit;
+void uiDrawTop(App *a, u16 *left, u16 *right, bool stereo);
+void uiDrawBottom(App *a, u16 *fb);
+// Whether a screen is mid-animation (fade, flash, toast) and needs redrawing.
+bool uiTopAnimating(const App *a);
+bool uiBottomAnimating(const App *a);
+// Whether the top screen shows a wiggle that flips with the delay.
+bool uiTopWiggles(const App *a, int *delayMs);
+
+typedef enum { HIT_NONE, HIT_BACK, HIT_SAVE, HIT_CANCEL, HIT_DELETE } Hit;
 Hit uiReviewHit(int x, int y);
 Hit uiDeleteDialogHit(int x, int y);
+int uiCellAt(int x, int y);

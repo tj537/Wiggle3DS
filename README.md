@@ -8,21 +8,23 @@ Homebrew-App für den New 3DS (XL): Sie nimmt ein 3D-Foto mit beiden Außenkamer
 2. Zwischenbilder aus einer Tiefenschätzung berechnen, damit die Kamerafahrt flüssig wird.
 3. Icon, Banner und CIA für das HOME-Menü.
 
-Aktueller Stand: Schritt 1 ist fertig. Die App nimmt in 640x480 auf, und jedes GIF bekommt eine eigene Palette, die aus seinen Farben berechnet wird. Dazu gibt es eine Galerie.
+Aktueller Stand: Schritt 1 ist fertig. Die App nimmt in 640x480 auf, jedes GIF bekommt eine eigene Palette, die aus seinen Farben berechnet wird, und auf dem Startscreen ist die Galerie.
 
 ## Bedienung
 
-- **Kamera:** Mit A, L oder R oder durch Antippen des Auslösers machst du ein Foto. Den Filter wählst du mit ◀/▶ oder per Touch auf die Filterleiste, Y oder das Vorschaubild öffnet die Galerie.
-- **Bearbeiten:** Tipp auf das Motiv, um den Drehpunkt zu setzen, mit L/R justierst du fein. Das Tempo stellst du mit dem Regler oder mit ▲/▼ ein, den Filter mit ◀/▶. A speichert, B geht zurück.
-- **Galerie:** Mit dem Steuerkreuz oder per Touch wählst du aus, ein zweites Antippen oder A öffnet die Aufnahme. X löscht nach einer Rückfrage, B bringt dich zur Kamera.
-- **3D-Regler:** In der Kamera, beim Bearbeiten und in der Galerie zeigt der obere Screen die Aufnahme dann in echtem 3D.
+Die App ist auf Englisch.
 
-Filter: Original, S/W, Noir, Sepia, Vintage, Pop, Kühl.
+- **Startscreen:** Oben läuft die Kamera, unten ist immer die Galerie. A, L oder R macht ein Foto.
+- **Durchblättern:** Mit dem Steuerkreuz oder durch Antippen eines Bildes wählst du eine Aufnahme. Sie erscheint oben als Standbild, Y spielt sie ab. A oder ein zweites Antippen öffnet sie zum Bearbeiten, X löscht sie nach einer Rückfrage, B bringt dich zurück zur Kamera.
+- **Bearbeiten:** Tipp auf dein Motiv, um den Drehpunkt zu setzen. Mit L/R oder ◀/▶ justierst du fein, das Tempo stellst du mit dem Regler oder ▲/▼ ein. A speichert, B geht zurück.
+- **3D-Regler:** Oben siehst du die Aufnahme dann in echtem 3D.
+
+Akku: Die App zeichnet nur neu, wenn sich etwas ändert. Die Kamera läuft mit 15 fps und ist beim Durchblättern aus, und den schnelleren Takt des New 3DS nutzt die App nur beim Bearbeiten und Speichern.
 
 ## Dateien auf der SD-Karte
 
 - `Wiggle3DS/GIF/WIG_0001.gif`: die fertigen Wigglegrams
-- `Wiggle3DS/Fotos/WIG_0001.w3d`: das 3D-Foto mit seinen Einstellungen, damit du es später in der Galerie neu bearbeiten kannst
+- `Wiggle3DS/Photos/WIG_0001.w3d`: das 3D-Foto mit seinen Einstellungen, damit du es später in der Galerie neu bearbeiten kannst
 
 ## Bauen
 
@@ -50,12 +52,12 @@ Falls der 3DS nicht automatisch gefunden wird, häng die angezeigte IP-Adresse m
 - `tools/genfont.swift` erzeugt `source/font_data.c` aus den Inter-Schriften in `fonts/` (SIL Open Font License):
 
   ```bash
-  swift tools/genfont.swift source/font_data.c fontSmall:fonts/Inter-Medium.ttf:10.5 fontBody:fonts/Inter-SemiBold.ttf:12.5 fontTitle:fonts/Inter-Bold.ttf:19 fontHuge:fonts/Inter-Bold.ttf:30
+  swift tools/genfont.swift source/font_data.c fontSmall:fonts/Inter-Medium.ttf:10.5 fontBody:fonts/Inter-SemiBold.ttf:12.5 fontTitle:fonts/Inter-Bold.ttf:19
   ```
 
 - `tools/preview.c` rendert alle Screens am Mac als BMP, damit du die Oberfläche ohne 3DS prüfen kannst (Eingabe: ein rohes RGB565-Stereopaar mit 640x480):
 
   ```bash
-  clang -O2 -I/opt/devkitpro/libctru/include -o preview tools/preview.c source/ui.c source/draw.c source/font_data.c source/filter.c source/wiggle.c -lm
+  clang -O2 -I/opt/devkitpro/libctru/include -o preview tools/preview.c source/ui.c source/draw.c source/font_data.c source/wiggle.c -lm
   ./preview paar.raw ausgabe/
   ```
