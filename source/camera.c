@@ -107,7 +107,9 @@ bool camPoll(void)
 			map[n++] = i;
 		}
 	s32 index = -1;
-	if (!n || R_FAILED(svcWaitSynchronizationN(&index, wait, n, false, 0)) || index < 0 || index >= n)
+	// A timeout result isn't negative, so R_FAILED doesn't catch it; and the
+	// index is meaningless then. Only an exact success means an event fired.
+	if (!n || svcWaitSynchronizationN(&index, wait, n, false, 0) != 0 || index < 0 || index >= n)
 		return false; // nothing pending; don't block the UI
 	int ev = map[index];
 	if (ev < 2)
