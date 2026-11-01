@@ -5,10 +5,12 @@
 #define FRAME_BYTES (CAM_W * CAM_H * 2)
 #define WAIT_NS 100000000LL // 100 ms, so pausing never waits long for the lock
 
-// Two buffers per eye: the camera fills the back one while the UI reads the
-// front one, so the preview never shows half a frame.
-static u16 *bufs[2][2]; // [eye][buffer]
-static volatile int front[2];
+// Three buffers per eye: one the UI shows, one with the newest complete
+// frame, and one the camera writes into. The camera never touches a buffer
+// the UI might be reading, so the preview never tears.
+static u16 *bufs[2][3]; // [eye][buffer]
+static int shown[2], ready[2], writing[2] = {1, 1};
+static LightLock swapLock; // guards shown/ready/writing
 static u32 transferUnit;
 // 0/1: buffer error events for CAM1/CAM2, 2/3: receive events for CAM1/CAM2.
 static Handle events[4];
@@ -35,7 +37,7 @@ static void closeEvent(int i)
 static void arm(int eye)
 {
 	if (!events[2 + eye])
-		CAMU_SetReceiving(&events[2 + eye], bufs[eye][front[eye] ^ 1], eye ? PORT_CAM2 : PORT_CAM1,
+		CAMU_SetReceiving(&events[2 + eye], bufs[eye][writing[eye]], eye ? PORT_CAM2 : PORT_CAM1,
 		                  FRAME_BYTES, (s16)transferUnit);
 }
 
@@ -55,9 +57,13 @@ static void serviceCamera(void)
 		CAMU_StartCapture(PORT_BOTH);
 		return;
 	}
+	int eye = index - 2;
 	closeEvent(index);
-	front[index - 2] ^= 1;
-	arm(index - 2);
+	LightLock_Lock(&swapLock);
+	ready[eye] = writing[eye];
+	writing[eye] = 3 - ready[eye] - shown[eye]; // the buffer that is neither
+	LightLock_Unlock(&swapLock);
+	arm(eye);
 	frameReady = true;
 }
 
@@ -83,8 +89,8 @@ static void cameraThread(void *arg)
 
 bool camOpen(void)
 {
-	for (int i = 0; i < 4; i++)
-		if (!(bufs[i / 2][i % 2] = calloc(1, FRAME_BYTES)))
+	for (int i = 0; i < 6; i++)
+		if (!(bufs[i / 3][i % 3] = calloc(1, FRAME_BYTES)))
 			return false;
 	if (R_FAILED(camInit()))
 		return false;
@@ -107,6 +113,7 @@ bool camOpen(void)
 	s32 prio = 0x30;
 	svcGetThreadPriority(&prio, CUR_THREAD_HANDLE);
 	LightLock_Init(&lock);
+	LightLock_Init(&swapLock);
 	quit = false;
 	thread = threadCreate(cameraThread, NULL, 0x4000, prio > 0x18 ? prio - 1 : prio, -2, false);
 	return thread != NULL;
@@ -160,19 +167,24 @@ void camClose(void)
 	closeEvent(0);
 	closeEvent(1);
 	camExit();
-	for (int i = 0; i < 4; i++)
+	for (int i = 0; i < 6; i++)
 	{
-		free(bufs[i / 2][i % 2]);
-		bufs[i / 2][i % 2] = NULL;
+		free(bufs[i / 3][i % 3]);
+		bufs[i / 3][i % 3] = NULL;
 	}
 }
 
 bool camPoll(void)
 {
-	bool ready = frameReady;
+	if (!frameReady)
+		return false;
 	frameReady = false;
-	return ready;
+	LightLock_Lock(&swapLock);
+	shown[0] = ready[0];
+	shown[1] = ready[1];
+	LightLock_Unlock(&swapLock);
+	return true;
 }
 
-const u16 *camLeft(void) { return bufs[0][front[0]]; }
-const u16 *camRight(void) { return bufs[1][front[1]]; }
+const u16 *camLeft(void) { return bufs[0][shown[0]]; }
+const u16 *camRight(void) { return bufs[1][shown[1]]; }

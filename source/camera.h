@@ -10,8 +10,8 @@ void camResume(void);
 void camPause(void);
 void camClose(void);
 
-// Handles pending camera events without waiting; true when a new frame is
-// complete. camLeft/camRight then point to it, until the next one.
+// True when a new frame is complete; camLeft/camRight then point to it and
+// stay valid (untouched by the camera) until the next successful poll.
 bool camPoll(void);
 
 const u16 *camLeft(void);
