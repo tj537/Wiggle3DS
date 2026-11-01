@@ -4,6 +4,8 @@
 #include <string.h>
 #include "app.h"
 #include "gif.h"
+#include "qrcodegen.h"
+#include "share.h"
 
 #define MAX_DX 200
 #define PREVIEW_DELAY_MS 120 // wait before loading the selected shot's preview
@@ -235,6 +237,44 @@ static void updateReview(u32 down)
 		backFromReview();
 }
 
+// ---- share ----
+
+static void openShare(void)
+{
+	camPause();
+	app.sharedCount = 0;
+	app.shareOk = shareStart(app.shareUrl, sizeof(app.shareUrl));
+	if (app.shareOk)
+	{
+		static u8 temp[sizeof(app.qr)];
+		app.shareOk = qrcodegen_encodeText(app.shareUrl, temp, app.qr, qrcodegen_Ecc_MEDIUM, 1, 10,
+		                                   qrcodegen_Mask_AUTO, true);
+	}
+	setMode(MODE_SHARE);
+}
+
+static void closeShare(void)
+{
+	shareStop();
+	setMode(MODE_HOME);
+	refreshGallery();
+	if (app.browsing && !app.shotCount)
+		app.browsing = false;
+	if (!app.browsing)
+		camResume();
+}
+
+static void updateShare(u32 down)
+{
+	if (app.shareOk && sharePoll())
+	{
+		app.sharedCount++;
+		bottomDirty = true;
+	}
+	if (down & (KEY_B | KEY_SELECT) || (released && touchY >= 210))
+		closeShare();
+}
+
 // ---- home ----
 
 static void deleteSelected(void)
@@ -267,6 +307,12 @@ static void updateHome(u32 down)
 		}
 		else if ((down & KEY_B) || hit == HIT_CANCEL)
 			app.confirmDelete = false;
+		return;
+	}
+
+	if ((down & KEY_SELECT) || (released && uiShareButtonHit(startX, startY) && uiShareButtonHit(touchX, touchY)))
+	{
+		openShare();
 		return;
 	}
 
@@ -389,11 +435,14 @@ int main(void)
 
 		if (app.mode == MODE_HOME)
 			updateHome(down);
-		else
+		else if (app.mode == MODE_REVIEW)
 			updateReview(down);
+		else
+			updateShare(down);
 		render();
 	}
 
+	shareStop();
 	camClose();
 	gfxExit();
 	return 0;

@@ -10,6 +10,7 @@ typedef enum
 {
 	MODE_HOME,   // top: live view or the selected shot, bottom: gallery
 	MODE_REVIEW, // edit pivot and speed, save
+	MODE_SHARE,  // web server for the phone, QR code on top
 } Mode;
 
 #define MAX_SHOTS 1000
@@ -19,7 +20,9 @@ typedef enum
 
 // ---- bottom screen layout, used for drawing and touch ----
 
-// Home: gallery grid
+// Home: share button in the header, gallery grid
+#define SHARE_BTN_Y 9
+#define SHARE_BTN_H 22
 #define GRID_COLS 4
 #define GRID_ROWS 3
 #define GRID_PAGE (GRID_COLS * GRID_ROWS)
@@ -69,6 +72,12 @@ typedef struct
 	Offset offset;
 	bool saving, fromGallery;
 
+	// Share: page address and its QR code (qrcodegen format, up to version 10).
+	bool shareOk;
+	char shareUrl[48];
+	u8 qr[(57 * 57 + 7) / 8 + 1];
+	int sharedCount;
+
 	// Toast message at the top of the bottom screen.
 	char toast[64];
 	bool toastError;
@@ -87,3 +96,4 @@ typedef enum { HIT_NONE, HIT_BACK, HIT_SAVE, HIT_CANCEL, HIT_DELETE } Hit;
 Hit uiReviewHit(int x, int y);
 Hit uiDeleteDialogHit(int x, int y);
 int uiCellAt(int x, int y);
+bool uiShareButtonHit(int x, int y);

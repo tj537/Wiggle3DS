@@ -18,6 +18,7 @@ Die App ist auf Englisch.
 - **Durchblättern:** Mit dem Steuerkreuz oder durch Antippen eines Bildes wählst du eine Aufnahme. Sie erscheint oben als Standbild, Y spielt sie ab. A oder ein zweites Antippen öffnet sie zum Bearbeiten, X löscht sie nach einer Rückfrage, B bringt dich zurück zur Kamera.
 - **Bearbeiten:** Tipp auf dein Motiv, um den Drehpunkt zu setzen. Mit L/R oder ◀/▶ justierst du fein, das Tempo stellst du mit dem Regler oder ▲/▼ ein. A speichert, B geht zurück.
 - **3D-Regler:** Oben siehst du die Aufnahme dann in echtem 3D.
+- **Aufs Handy (SELECT oder "Share" oben rechts):** Oben erscheint ein QR-Code. Scannst du ihn mit der Handy-Kamera (Handy im selben WLAN), öffnet sich eine Seite mit allen GIFs. Dort hältst du ein GIF gedrückt und wählst "Zu Fotos hinzufügen", oder du tippst auf "Save". Der kleine Webserver (Port 8080) läuft nur, solange dieser Screen offen ist.
 
 Akku: Die App zeichnet nur neu, wenn sich etwas ändert. Die Kamera läuft mit 20 fps und ist beim Durchblättern aus, und den schnelleren Takt des New 3DS nutzt die App nur beim Bearbeiten und Speichern.
 
@@ -46,6 +47,11 @@ Wichtig: Im Pfad zum Projektordner dürfen keine Leerzeichen sein, sonst bricht 
 ```
 
 Falls der 3DS nicht automatisch gefunden wird, häng die angezeigte IP-Adresse mit `-a <IP>` an.
+
+## Fremder Code
+
+- `source/qrcodegen.c/.h`: [QR Code generator](https://github.com/nayuki/QR-Code-generator) von Project Nayuki (MIT-Lizenz)
+- `fonts/`: [Inter](https://github.com/rsms/inter) (SIL Open Font License)
 
 ## Werkzeuge
 

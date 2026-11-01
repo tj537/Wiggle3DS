@@ -1,6 +1,7 @@
 #include <string.h>
 #include "app.h"
 #include "draw.h"
+#include "qrcodegen.h"
 
 // Dark purple theme.
 #define C_BG_TOP COL565(30, 18, 52)
@@ -170,6 +171,8 @@ static void reviewTop(App *a, u16 *fb, int eye, bool stereo)
 	overlayPill(fb, 400, 200, 212, stereo ? "3D view" : tfmt("%d ms", a->delayMs));
 }
 
+static void shareTop(App *a, u16 *fb);
+
 void uiDrawTop(App *a, u16 *left, u16 *right, bool stereo)
 {
 	for (int eye = 0; eye <= (stereo ? 1 : 0); eye++)
@@ -177,8 +180,10 @@ void uiDrawTop(App *a, u16 *left, u16 *right, bool stereo)
 		u16 *fb = eye ? right : left;
 		if (a->mode == MODE_HOME)
 			homeTop(a, fb, eye, stereo);
-		else
+		else if (a->mode == MODE_REVIEW)
 			reviewTop(a, fb, eye, stereo);
+		else
+			shareTop(a, fb);
 
 		u64 flash = a->now - a->flashAt, fade = a->now - a->modeSince;
 		if (a->flashAt && flash < FLASH_MS)
@@ -189,6 +194,14 @@ void uiDrawTop(App *a, u16 *left, u16 *right, bool stereo)
 }
 
 // ---- bottom screen: home ----
+
+static int shareButtonWidth(void) { return hintWidth("SELECT", "Share") + 16; }
+
+bool uiShareButtonHit(int x, int y)
+{
+	int w = shareButtonWidth();
+	return x >= 308 - w - 4 && x < 312 && y >= SHARE_BTN_Y - 4 && y < SHARE_BTN_Y + SHARE_BTN_H + 4;
+}
 
 static void homeEmpty(u16 *fb)
 {
@@ -208,15 +221,15 @@ static void homeBottom(App *a, u16 *fb)
 	background(fb);
 	drawTextGrad(fb, 320, &fontTitle, 16, 9, C_ACC0, C_ACC1, "Wiggle3DS");
 
+	int sw = shareButtonWidth();
+	drawRoundRect(fb, 320, 308 - sw, SHARE_BTN_Y, sw, SHARE_BTN_H, SHARE_BTN_H / 2, C_SURFACE2, 255);
+	drawHint(fb, 320, 308 - sw + 8, SHARE_BTN_Y + (SHARE_BTN_H - lineH(&fontSmall)) / 2, "SELECT", "Share", C_TEXT, 255);
+
 	if (!a->shotCount)
 		homeEmpty(fb);
 	else
 	{
-		int pages = (a->shotCount + GRID_PAGE - 1) / GRID_PAGE, page = a->sel / GRID_PAGE;
-		const char *info = tfmt(a->shotCount == 1 ? "%d wigglegram" : "%d wigglegrams", a->shotCount);
-		if (pages > 1)
-			info = tfmt("%s · page %d/%d", info, page + 1, pages);
-		drawText(fb, 320, &fontSmall, 304 - textWidth(&fontSmall, info), 17, C_DIM, 255, info);
+		int page = a->sel / GRID_PAGE;
 
 		for (int i = 0; i < GRID_PAGE && page * GRID_PAGE + i < a->shotCount; i++)
 		{
@@ -299,6 +312,64 @@ static void reviewBottom(App *a, u16 *fb)
 	}
 }
 
+// ---- share ----
+
+static void shareTop(App *a, u16 *fb)
+{
+	drawClear(fb, 400, COL565(11, 7, 20));
+	if (!a->shareOk)
+	{
+		drawTextCentered(fb, 400, &fontTitle, 200, 96, C_TEXT, 255, "No WiFi connection");
+		drawTextCentered(fb, 400, &fontBody, 200, 128, C_DIM, 255, "Turn on WiFi and try again.");
+		return;
+	}
+	// White card with the code and a quiet zone of 3 modules.
+	int n = qrcodegen_getSize(a->qr), quiet = 3, scale = 216 / (n + 2 * quiet);
+	int card = (n + 2 * quiet) * scale, x0 = 200 - card / 2, y0 = 120 - card / 2;
+	drawShadow(fb, 400, x0, y0, card, card, 14, 200);
+	drawRoundRect(fb, 400, x0, y0, card, card, 14, C_WHITE, 255);
+	for (int y = 0; y < n; y++)
+		for (int x = 0; x < n; x++)
+			if (qrcodegen_getModule(a->qr, x, y))
+				drawFill(fb, 400, x0 + (quiet + x) * scale, y0 + (quiet + y) * scale, scale, scale, COL565(20, 12, 36), 255);
+}
+
+static void step(u16 *fb, int y, int num, const char *text)
+{
+	drawCircleGrad(fb, 320, 28, y + 9, 9, C_ACC0, C_ACC1, 255);
+	drawTextCentered(fb, 320, &fontSmall, 28, y + 9 - lineH(&fontSmall) / 2, C_TEXT, 255, tfmt("%d", num));
+	drawText(fb, 320, &fontBody, 46, y + 9 - lineH(&fontBody) / 2, C_TEXT, 255, text);
+}
+
+static void shareBottom(App *a, u16 *fb)
+{
+	background(fb);
+	drawTextGrad(fb, 320, &fontTitle, 16, 9, C_ACC0, C_ACC1, "Share to phone");
+
+	if (a->shareOk)
+	{
+		step(fb, 48, 1, "Put your phone on the same WiFi");
+		step(fb, 78, 2, "Scan the code with its camera");
+		step(fb, 108, 3, "Hold a GIF, then Save to Photos");
+
+		int w = textWidth(&fontBody, a->shareUrl) + 32;
+		drawRoundRect(fb, 320, 160 - w / 2, 146, w, 28, 14, C_SURFACE, 255);
+		drawRoundRectOutline(fb, 320, 160 - w / 2, 146, w, 28, 14, 1, C_STROKE, 255);
+		drawTextCentered(fb, 320, &fontBody, 160, 146 + (28 - lineH(&fontBody)) / 2, C_TEXT, 255, a->shareUrl);
+		if (a->sharedCount)
+			drawTextCentered(fb, 320, &fontSmall, 160, 184, C_DIM, 255,
+			                 tfmt(a->sharedCount == 1 ? "%d GIF sent" : "%d GIFs sent", a->sharedCount));
+	}
+	else
+	{
+		drawTextCentered(fb, 320, &fontBody, 160, 90, C_TEXT, 255, "Your 3DS isn't connected to WiFi.");
+		drawTextCentered(fb, 320, &fontSmall, 160, 112, C_DIM, 255, "Check the WiFi switch and your connection settings.");
+	}
+
+	int hw = hintWidth("B", "Close");
+	drawHint(fb, 320, 160 - hw / 2, 218, "B", "Close", C_DIM, 255);
+}
+
 // ---- shared ----
 
 static void toast(App *a, u16 *fb)
@@ -320,8 +391,10 @@ void uiDrawBottom(App *a, u16 *fb)
 {
 	if (a->mode == MODE_HOME)
 		homeBottom(a, fb);
-	else
+	else if (a->mode == MODE_REVIEW)
 		reviewBottom(a, fb);
+	else
+		shareBottom(a, fb);
 	toast(a, fb);
 
 	u64 t = a->now - a->modeSince;

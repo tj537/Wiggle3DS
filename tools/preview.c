@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../source/app.h"
+#include "../source/qrcodegen.h"
 
 static App app;
 static u16 top[2][400 * 240], bottom[320 * 240];
@@ -109,5 +110,17 @@ int main(int argc, char **argv)
 	app.toast[0] = 0;
 	app.saving = true;
 	render(dir, "review_saving");
+	app.saving = false;
+
+	// Share screen with a QR code for an example address.
+	app.mode = MODE_SHARE;
+	app.shareOk = true;
+	app.sharedCount = 2;
+	strcpy(app.shareUrl, "http://192.168.68.42:8080/");
+	static u8 temp[sizeof(app.qr)];
+	qrcodegen_encodeText(app.shareUrl, temp, app.qr, qrcodegen_Ecc_MEDIUM, 1, 10, qrcodegen_Mask_AUTO, true);
+	render(dir, "share");
+	app.shareOk = false;
+	render(dir, "share_nowifi");
 	return 0;
 }
