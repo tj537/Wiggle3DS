@@ -19,7 +19,7 @@ Die App ist auf Englisch.
 - **Bearbeiten:** Tipp auf dein Motiv, um den Drehpunkt zu setzen. Mit L/R oder ◀/▶ justierst du fein, das Tempo stellst du mit dem Regler oder ▲/▼ ein. A speichert, B geht zurück.
 - **3D-Regler:** Oben siehst du die Aufnahme dann in echtem 3D.
 
-Akku: Die App zeichnet nur neu, wenn sich etwas ändert. Die Kamera läuft mit 15 fps und ist beim Durchblättern aus, und den schnelleren Takt des New 3DS nutzt die App nur beim Bearbeiten und Speichern.
+Akku: Die App zeichnet nur neu, wenn sich etwas ändert. Die Kamera läuft mit 20 fps und ist beim Durchblättern aus, und den schnelleren Takt des New 3DS nutzt die App nur beim Bearbeiten und Speichern.
 
 ## Dateien auf der SD-Karte
 
