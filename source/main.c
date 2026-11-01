@@ -251,7 +251,11 @@ static void deleteSelected(void)
 static void updateHome(u32 down)
 {
 	if (!app.browsing && app.camOk && camPoll())
+	{
+		app.liveL = camLeft();
+		app.liveR = camRight();
 		topDirty = true;
+	}
 
 	if (app.confirmDelete)
 	{

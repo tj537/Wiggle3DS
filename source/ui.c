@@ -2,16 +2,16 @@
 #include "app.h"
 #include "draw.h"
 
-// Dark neon theme.
-#define C_BG_TOP COL565(22, 20, 34)
-#define C_BG_BOTTOM COL565(9, 9, 15)
-#define C_SURFACE COL565(30, 29, 44)
-#define C_SURFACE2 COL565(44, 42, 62)
-#define C_STROKE COL565(70, 66, 96)
-#define C_TEXT COL565(246, 245, 250)
-#define C_DIM COL565(150, 147, 172)
-#define C_ACC0 COL565(255, 61, 154)
-#define C_ACC1 COL565(255, 140, 64)
+// Dark purple theme.
+#define C_BG_TOP COL565(30, 18, 52)
+#define C_BG_BOTTOM COL565(11, 7, 20)
+#define C_SURFACE COL565(36, 26, 58)
+#define C_SURFACE2 COL565(52, 40, 80)
+#define C_STROKE COL565(84, 66, 122)
+#define C_TEXT COL565(248, 245, 255)
+#define C_DIM COL565(160, 148, 190)
+#define C_ACC0 COL565(124, 77, 255)
+#define C_ACC1 COL565(214, 110, 255)
 #define C_RED COL565(255, 76, 92)
 #define C_BLACK 0
 #define C_WHITE 0xFFFF
@@ -270,9 +270,12 @@ static void reviewBottom(App *a, u16 *fb)
 	drawRing(fb, 320, px, py, 10, 2, C_TEXT, 240);
 	drawCircleGrad(fb, 320, px, py, 3.5f, C_ACC0, C_ACC1, 255);
 
-	const char *hint = "Tap your subject · L/R to fine-tune";
-	drawRoundRect(fb, 320, CARD_X + 8, CARD_Y + 8, textWidth(&fontSmall, hint) + 20, 20, 10, C_BLACK, 150);
-	drawText(fb, 320, &fontSmall, CARD_X + 18, CARD_Y + 8 + (20 - lineH(&fontSmall)) / 2, C_TEXT, 255, hint);
+	if (!a->toast[0] || a->now - a->toastAt >= TOAST_MS) // the toast sits here
+	{
+		const char *hint = "Tap your subject · L/R to fine-tune";
+		drawRoundRect(fb, 320, CARD_X + 8, CARD_Y + 8, textWidth(&fontSmall, hint) + 20, 20, 10, C_BLACK, 150);
+		drawText(fb, 320, &fontSmall, CARD_X + 18, CARD_Y + 8 + (20 - lineH(&fontSmall)) / 2, C_TEXT, 255, hint);
+	}
 
 	// Speed slider.
 	drawText(fb, 320, &fontSmall, 16, SLIDER_Y - lineH(&fontSmall) / 2, C_DIM, 255, "Speed");
