@@ -8,7 +8,7 @@ Homebrew-App für den New 3DS (XL): Sie nimmt ein 3D-Foto mit beiden Außenkamer
 2. Zwischenbilder aus einer Tiefenschätzung berechnen, damit die Kamerafahrt flüssig wird.
 3. Filter, Icon und Banner.
 
-Aktueller Stand: Toolchain-Test (Text auf dem oberen Screen und Anzeige des 3D-Reglers).
+Aktueller Stand: Schritt 1 (3D-Live-Vorschau, Drehpunkt per Touch, Wiggle-Vorschau, GIF-Export nach `sdmc:/Wiggle3DS/`).
 
 ## Bauen
 
