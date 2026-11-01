@@ -1,274 +1,240 @@
 #include <3ds.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-#include "camera.h"
-#include "draw.h"
+#include "app.h"
+#include "filter.h"
 #include "gif.h"
-#include "storage.h"
-#include "wiggle.h"
 
-// Bottom screen review layout: 640x480 shown as 256x192, text below.
-#define PREVIEW_X 32
-#define PREVIEW_W 256
-#define PREVIEW_H 192
 #define MAX_DX 200
+#define PREVIEW_DELAY_MS 120 // wait before loading the selected gallery preview
 
-// Gallery grid: 4x3 thumbnails of 80x60 on the bottom screen.
-#define GRID_COLS 4
-#define GRID_ROWS 3
-#define PAGE (GRID_COLS * GRID_ROWS)
-#define CELL_W 80
-#define CELL_H 60
-#define MAX_SHOTS 1000
-
-#define WHITE COL565(255, 255, 255)
-#define GREY COL565(150, 150, 160)
-#define ACCENT COL565(255, 80, 200)
-#define BG COL565(16, 12, 28)
-
-typedef enum
-{
-	MODE_CAMERA,
-	MODE_REVIEW,
-	MODE_GALLERY,
-} Mode;
-
-static Mode mode = MODE_CAMERA, reviewReturn = MODE_CAMERA;
-static char status[64];
-
-// Shot being reviewed. shotNum is -1 until it has been saved once.
+static App app;
 static u16 shotL[CAM_W * CAM_H], shotR[CAM_W * CAM_H];
-static int shotNum = -1;
-static int pivotX = CAM_W / 2, pivotY = CAM_H / 2;
-static Offset offset;
-static int delayMs = 120;
 
-// Gallery state; thumbnails are loaded for the visible page only.
-static int shots[MAX_SHOTS], shotCount, sel, loadedPage = -1;
-static u16 thumbL[PAGE][THUMB_W * THUMB_H], thumbR[PAGE][THUMB_W * THUMB_H];
-static bool thumbOk[PAGE], confirmDelete;
+// Touch: where the current touch started and where it was last seen.
+static bool touching, released;
+static int touchX, touchY, startX, startY;
+static u64 selChangedAt;
+static int previewTried = -1; // shot whose preview load was last attempted
 
-static bool wigglePhase(void) { return (osGetTime() / delayMs) & 1; }
+static bool inRect(int x, int y, int rx, int ry, int rw, int rh) { return x >= rx && x < rx + rw && y >= ry && y < ry + rh; }
+static bool inCircle(int x, int y, int cx, int cy, int r) { return (x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r; }
+static bool tapped(bool (*hit)(int, int)) { return released && hit(startX, startY) && hit(touchX, touchY); }
 
-static void swap(void)
+static void setMode(Mode m)
 {
+	app.mode = m;
+	app.modeSince = osGetTime();
+}
+
+static void showToast(bool error, const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(app.toast, sizeof(app.toast), fmt, ap);
+	va_end(ap);
+	app.toastError = error;
+	app.toastAt = osGetTime();
+}
+
+static void render(void)
+{
+	bool stereo = osGet3DSliderState() > 0.0f;
+	gfxSet3D(stereo);
+	app.now = osGetTime();
+	uiDraw(&app, (u16 *)gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL),
+	       stereo ? (u16 *)gfxGetFramebuffer(GFX_TOP, GFX_RIGHT, NULL, NULL) : NULL,
+	       (u16 *)gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, NULL, NULL), stereo);
 	gfxFlushBuffers();
 	gfxSwapBuffers();
 	gspWaitForVBlank();
 }
 
+static void refreshLastThumb(void)
+{
+	static int nums[MAX_SHOTS];
+	app.lastThumbOk = storageList(nums, MAX_SHOTS) > 0 && storageLoadThumb(nums[0], app.lastThumb, NULL);
+}
+
+static void setFilter(int f)
+{
+	app.filter = (f + FILTER_COUNT) % FILTER_COUNT;
+	app.filterChangedAt = osGetTime();
+}
+
 // ---- camera ----
 
-static void drawCamera(void)
-{
-	bool stereo = osGet3DSliderState() > 0.0f;
-	gfxSet3D(stereo);
-	for (int eye = 0; eye <= (stereo ? 1 : 0); eye++)
-	{
-		u16 *fb = drawFramebuffer(1, eye);
-		drawClear(fb, 400, 0);
-		drawImageScaled(fb, 400, 40, 0, 320, 240, eye ? camRight() : camLeft(), CAM_W, 0, 0, CAM_W, CAM_H);
-	}
-
-	u16 *fb = drawFramebuffer(0, 0);
-	drawClear(fb, 320, BG);
-	drawText(fb, 320, 16, 24, ACCENT, "WIGGLE3DS");
-	drawText(fb, 320, 16, 56, WHITE, "A / L / R   Foto aufnehmen");
-	drawText(fb, 320, 16, 72, WHITE, "Y           Galerie");
-	drawText(fb, 320, 16, 88, WHITE, "3D-Regler   3D-Vorschau");
-	drawText(fb, 320, 16, 104, WHITE, "START       Beenden");
-	drawText(fb, 320, 16, 136, GREY, "Tipp: Motiv 0,5-2 m entfernt,");
-	drawText(fb, 320, 16, 148, GREY, "mit Hintergrund dahinter.");
-	if (status[0])
-		drawText(fb, 320, 16, 216, ACCENT, "%s", status);
-}
+static bool onShutter(int x, int y) { return inCircle(x, y, SHUTTER_X, SHUTTER_Y, SHUTTER_R + 6); }
+static bool onGalleryButton(int x, int y) { return inRect(x, y, GALLERY_BTN_X - 4, GALLERY_BTN_Y - 4, GALLERY_BTN_S + 8, GALLERY_BTN_S + 24); }
+static bool onFilterButton(int x, int y) { return inCircle(x, y, FILTER_BTN_X, FILTER_BTN_Y, FILTER_BTN_R + 8); }
 
 static void openGallery(void);
 
-static void updateCamera(u32 down)
+static void capture(void)
 {
-	camPoll();
-	if (down & (KEY_A | KEY_L | KEY_R))
+	if (!app.camOk)
+		return;
+	CAMU_PlayShutterSound(SHUTTER_SOUND_TYPE_NORMAL);
+	memcpy(shotL, camLeft(), sizeof(shotL));
+	memcpy(shotR, camRight(), sizeof(shotR));
+	camPause();
+	wiggleSetImages(shotL, shotR);
+	app.shotNum = -1;
+	app.pivotX = CAM_W / 2;
+	app.pivotY = CAM_H / 2;
+	app.offset = wiggleMatch(app.pivotX, app.pivotY);
+	app.reviewReturn = MODE_CAMERA;
+	setMode(MODE_REVIEW);
+}
+
+static void updateCamera(u32 down, u32 held)
+{
+	if (app.camOk)
+		camPoll();
+	app.shutterHeld = (held & (KEY_A | KEY_L | KEY_R)) || (touching && onShutter(touchX, touchY));
+
+	if (down & KEY_LEFT)
+		setFilter(app.filter - 1);
+	if (down & KEY_RIGHT)
+		setFilter(app.filter + 1);
+	if (down & KEY_TOUCH)
 	{
-		CAMU_PlayShutterSound(SHUTTER_SOUND_TYPE_NORMAL);
-		memcpy(shotL, camLeft(), sizeof(shotL));
-		memcpy(shotR, camRight(), sizeof(shotR));
-		camPause();
-		wiggleSetImages(shotL, shotR);
-		shotNum = -1;
-		pivotX = CAM_W / 2;
-		pivotY = CAM_H / 2;
-		offset = wiggleMatch(pivotX, pivotY);
-		status[0] = 0;
-		reviewReturn = MODE_CAMERA;
-		mode = MODE_REVIEW;
+		int chip = uiChipAt(&app, touchX, touchY);
+		if (chip >= 0 && chip != app.filter)
+			setFilter(chip);
 	}
-	else if (down & KEY_Y)
+
+	if ((down & (KEY_A | KEY_L | KEY_R)) || tapped(onShutter))
+		capture();
+	else if ((down & KEY_Y) || tapped(onGalleryButton))
 	{
 		camPause();
 		openGallery();
 	}
+	else if (tapped(onFilterButton))
+		setFilter(app.filter + 1);
 }
 
 // ---- review ----
 
-static void drawReview(void)
+static void backFromReview(void)
 {
-	gfxSet3D(false);
-	Crop c = wiggleCrop(offset);
-	int dw = c.w * 240 / c.h, dh = 240;
-	if (dw > 400)
+	if (app.reviewReturn == MODE_GALLERY)
+		openGallery();
+	else
 	{
-		dw = 400;
-		dh = c.h * 400 / c.w;
+		camResume();
+		setMode(MODE_CAMERA);
 	}
-	bool second = wigglePhase();
-	u16 *fb = drawFramebuffer(1, 0);
-	drawClear(fb, 400, 0);
-	drawImageScaled(fb, 400, (400 - dw) / 2, (240 - dh) / 2, dw, dh,
-	                second ? shotR : shotL, CAM_W, second ? c.rx : c.lx, second ? c.ry : c.ly, c.w, c.h);
-
-	fb = drawFramebuffer(0, 0);
-	drawClear(fb, 320, BG);
-	drawImageScaled(fb, 320, PREVIEW_X, 0, PREVIEW_W, PREVIEW_H, shotL, CAM_W, 0, 0, CAM_W, CAM_H);
-	drawCross(fb, 320, PREVIEW_X + pivotX * PREVIEW_W / CAM_W, pivotY * PREVIEW_H / CAM_H, 8, ACCENT);
-	drawText(fb, 320, 4, 196, WHITE, "Tippen: Drehpunkt  </>: fein (%d)", offset.dx);
-	drawText(fb, 320, 4, 208, WHITE, "Hoch/Runter: Tempo %d ms", delayMs);
-	drawText(fb, 320, 4, 220, WHITE, "A: GIF speichern   B: Zurueck");
-	if (status[0])
-		drawText(fb, 320, 4, 231, ACCENT, "%s", status);
 }
 
 static void saveShot(void)
 {
-	snprintf(status, sizeof(status), "Speichere...");
-	drawReview();
-	swap();
+	app.saving = true;
+	render();
 
 	storageInit();
-	if (shotNum < 0)
-		shotNum = storageNextNumber();
-	ShotInfo info = {pivotX, pivotY, offset.dx, offset.dy, delayMs};
+	if (app.shotNum < 0)
+		app.shotNum = storageNextNumber();
+	ShotInfo info = {app.pivotX, app.pivotY, app.offset.dx, app.offset.dy, app.delayMs, app.filter};
 	char path[64];
-	storageGifPath(shotNum, path, sizeof(path));
-	Crop c = wiggleCrop(offset);
+	storageGifPath(app.shotNum, path, sizeof(path));
+	Crop c = wiggleCrop(app.offset);
+	const u16 *lut = filterLut(app.filter);
 	GifFrame frames[2] = {
-		{shotL, CAM_W, c.lx, c.ly},
-		{shotR, CAM_W, c.rx, c.ry},
+		{shotL, CAM_W, c.lx, c.ly, lut},
+		{shotR, CAM_W, c.rx, c.ry, lut},
 	};
-	if (storageSave(shotNum, shotL, shotR, &info) && gifWrite(path, frames, 2, c.w, c.h, delayMs))
-		snprintf(status, sizeof(status), "Gespeichert: GIF/WIG_%04d.gif", shotNum);
+	if (storageSave(app.shotNum, shotL, shotR, &info) && gifWrite(path, frames, 2, c.w, c.h, app.delayMs))
+		showToast(false, "Gespeichert · WIG_%04d.gif", app.shotNum);
 	else
-		snprintf(status, sizeof(status), "Fehler beim Speichern!");
-	loadedPage = -1; // gallery thumbnails may have changed
+		showToast(true, "Speichern fehlgeschlagen");
+
+	app.saving = false;
+	app.gridPage = -1; // gallery thumbnails may have changed
+	app.previewNum = -1;
+	refreshLastThumb();
 }
 
-static void updateReview(u32 down, u32 held)
+static void updateReview(u32 down)
 {
-	if (held & KEY_TOUCH)
+	if (touching && inRect(startX, startY, CARD_X, CARD_Y, CARD_W, CARD_H))
 	{
-		touchPosition t;
-		hidTouchRead(&t);
-		int tx = t.px - PREVIEW_X;
-		if (tx >= 0 && tx < PREVIEW_W && t.py < PREVIEW_H)
+		int tx = touchX < CARD_X ? CARD_X : touchX >= CARD_X + CARD_W ? CARD_X + CARD_W - 1 : touchX;
+		int ty = touchY < CARD_Y ? CARD_Y : touchY >= CARD_Y + CARD_H ? CARD_Y + CARD_H - 1 : touchY;
+		int x = (tx - CARD_X) * CAM_W / CARD_W, y = (ty - CARD_Y) * CAM_H / CARD_H;
+		if (x != app.pivotX || y != app.pivotY)
 		{
-			int x = tx * CAM_W / PREVIEW_W, y = t.py * CAM_H / PREVIEW_H;
-			if (x != pivotX || y != pivotY)
-			{
-				pivotX = x;
-				pivotY = y;
-				offset = wiggleMatch(pivotX, pivotY);
-			}
+			app.pivotX = x;
+			app.pivotY = y;
+			app.offset = wiggleMatch(x, y);
 		}
 	}
-	if ((down & KEY_LEFT) && offset.dx > -MAX_DX)
-		offset.dx--;
-	if ((down & KEY_RIGHT) && offset.dx < MAX_DX)
-		offset.dx++;
-	if ((down & KEY_UP) && delayMs > 40)
-		delayMs -= 20;
-	if ((down & KEY_DOWN) && delayMs < 400)
-		delayMs += 20;
-	if (down & KEY_A)
+	if (touching && inRect(startX, startY, SLIDER_X0 - 20, SLIDER_Y - 12, SLIDER_X1 - SLIDER_X0 + 40, 24))
+	{
+		int x = touchX < SLIDER_X0 ? SLIDER_X0 : touchX > SLIDER_X1 ? SLIDER_X1 : touchX;
+		int v = DELAY_MIN + (x - SLIDER_X0) * (DELAY_MAX - DELAY_MIN) / (SLIDER_X1 - SLIDER_X0);
+		app.delayMs = (v + DELAY_STEP / 2) / DELAY_STEP * DELAY_STEP;
+	}
+
+	Hit hit = released && uiReviewHit(startX, startY) == uiReviewHit(touchX, touchY) ? uiReviewHit(touchX, touchY) : HIT_NONE;
+	if ((down & KEY_LEFT) || hit == HIT_FILTER_PREV)
+		app.filter = (app.filter + FILTER_COUNT - 1) % FILTER_COUNT;
+	if ((down & KEY_RIGHT) || hit == HIT_FILTER_NEXT)
+		app.filter = (app.filter + 1) % FILTER_COUNT;
+	if ((down & KEY_L) && app.offset.dx > -MAX_DX)
+		app.offset.dx--;
+	if ((down & KEY_R) && app.offset.dx < MAX_DX)
+		app.offset.dx++;
+	if ((down & KEY_UP) && app.delayMs > DELAY_MIN)
+		app.delayMs -= DELAY_STEP;
+	if ((down & KEY_DOWN) && app.delayMs < DELAY_MAX)
+		app.delayMs += DELAY_STEP;
+	if ((down & KEY_A) || hit == HIT_SAVE)
 		saveShot();
-	if (down & KEY_B)
-	{
-		status[0] = 0;
-		if (reviewReturn == MODE_GALLERY)
-			openGallery();
-		else
-		{
-			camResume();
-			mode = MODE_CAMERA;
-		}
-	}
+	else if ((down & KEY_B) || hit == HIT_BACK)
+		backFromReview();
 }
 
 // ---- gallery ----
 
-static void openGallery(void)
-{
-	shotCount = storageList(shots, MAX_SHOTS);
-	if (sel >= shotCount)
-		sel = shotCount ? shotCount - 1 : 0;
-	loadedPage = -1;
-	confirmDelete = false;
-	status[0] = 0;
-	mode = MODE_GALLERY;
-}
-
 static void loadPage(void)
 {
-	int page = sel / PAGE;
-	if (page == loadedPage)
+	int page = app.sel / GRID_PAGE;
+	if (page == app.gridPage)
 		return;
-	for (int i = 0; i < PAGE; i++)
+	for (int i = 0; i < GRID_PAGE; i++)
 	{
-		int idx = page * PAGE + i;
-		thumbOk[i] = idx < shotCount && storageLoadThumbs(shots[idx], thumbL[i], thumbR[i]);
+		int idx = page * GRID_PAGE + i;
+		app.gridOk[i] = idx < app.shotCount && storageLoadThumb(app.shots[idx], app.grid[i], &app.gridInfo[i]);
 	}
-	loadedPage = page;
+	app.gridPage = page;
 }
 
-static void drawGallery(void)
+static void openGallery(void)
 {
-	gfxSet3D(false);
-	u16 *top = drawFramebuffer(1, 0), *fb = drawFramebuffer(0, 0);
-	drawClear(top, 400, 0);
-	drawClear(fb, 320, BG);
-
-	if (!shotCount)
-	{
-		drawText(top, 400, 108, 116, GREY, "Noch keine Wigglegrams.");
-		drawText(fb, 320, 16, 80, WHITE, "Mach ein Foto und speichere");
-		drawText(fb, 320, 16, 92, WHITE, "es mit A, dann landet es hier.");
-		drawText(fb, 320, 16, 200, WHITE, "B: Zurueck zur Kamera");
-		return;
-	}
-
+	app.shotCount = storageList(app.shots, MAX_SHOTS);
+	if (app.sel >= app.shotCount)
+		app.sel = app.shotCount ? app.shotCount - 1 : 0;
+	app.gridPage = -1;
+	app.previewNum = -1;
+	previewTried = -1;
+	app.confirmDelete = false;
+	selChangedAt = osGetTime();
 	loadPage();
-	int page = sel / PAGE, cur = sel % PAGE;
-	// The selected shot wiggles big on the top screen.
-	if (thumbOk[cur])
-		drawImageScaled(top, 400, 40, 0, 320, 240, wigglePhase() ? thumbR[cur] : thumbL[cur], THUMB_W, 0, 0, THUMB_W, THUMB_H);
+	setMode(MODE_GALLERY);
+}
 
-	for (int i = 0; i < PAGE && page * PAGE + i < shotCount; i++)
+static int cellAt(int x, int y)
+{
+	for (int i = 0; i < GRID_PAGE; i++)
 	{
-		int x = (i % GRID_COLS) * CELL_W, y = (i / GRID_COLS) * CELL_H;
-		if (i == cur)
-			drawRect(fb, 320, x, y, CELL_W, CELL_H, ACCENT);
-		if (thumbOk[i])
-			drawImageScaled(fb, 320, x + 3, y + 3, CELL_W - 6, CELL_H - 6, thumbL[i], THUMB_W, 0, 0, THUMB_W, THUMB_H);
-		else
-			drawRect(fb, 320, x + 3, y + 3, CELL_W - 6, CELL_H - 6, GREY);
+		int cx = GRID_X + (i % GRID_COLS) * (CELL_W + CELL_GAP), cy = GRID_Y + (i / GRID_COLS) * (CELL_H + CELL_GAP);
+		if (inRect(x, y, cx - CELL_GAP / 2, cy - CELL_GAP / 2, CELL_W + CELL_GAP, CELL_H + CELL_GAP))
+			return i;
 	}
-
-	drawText(fb, 320, 4, 186, ACCENT, "GALERIE  WIG_%04d  (%d/%d)", shots[sel], sel + 1, shotCount);
-	drawText(fb, 320, 4, 200, WHITE, "A: Oeffnen  X: Loeschen  B: Kamera");
-	if (confirmDelete)
-		drawText(fb, 320, 4, 216, ACCENT, "Nochmal X druecken zum Loeschen");
-	else if (status[0])
-		drawText(fb, 320, 4, 216, ACCENT, "%s", status);
+	return -1;
 }
 
 static void openShot(int num)
@@ -276,69 +242,93 @@ static void openShot(int num)
 	ShotInfo info;
 	if (!storageLoad(num, shotL, shotR, &info))
 	{
-		snprintf(status, sizeof(status), "Konnte WIG_%04d nicht laden", num);
+		showToast(true, "WIG_%04d konnte nicht geladen werden", num);
 		return;
 	}
 	wiggleSetImages(shotL, shotR);
-	shotNum = num;
-	pivotX = info.pivotX;
-	pivotY = info.pivotY;
-	offset = (Offset){info.dx, info.dy};
-	delayMs = info.delayMs;
-	status[0] = 0;
-	reviewReturn = MODE_GALLERY;
-	mode = MODE_REVIEW;
+	app.shotNum = num;
+	app.pivotX = info.pivotX;
+	app.pivotY = info.pivotY;
+	app.offset = (Offset){info.dx, info.dy};
+	app.delayMs = info.delayMs;
+	app.filter = info.filter;
+	app.reviewReturn = MODE_GALLERY;
+	setMode(MODE_REVIEW);
 }
 
 static void deleteSelected(void)
 {
-	int num = shots[sel], keep = sel;
+	int num = app.shots[app.sel], keep = app.sel;
 	storageDelete(num);
 	openGallery();
-	sel = keep < shotCount ? keep : (shotCount ? shotCount - 1 : 0);
-	snprintf(status, sizeof(status), "WIG_%04d geloescht", num);
+	app.sel = keep < app.shotCount ? keep : (app.shotCount ? app.shotCount - 1 : 0);
+	app.modeSince = 0; // no fade, we stay in the gallery
+	app.gridPage = -1;
+	loadPage();
+	refreshLastThumb();
+	showToast(false, "WIG_%04d gelöscht", num);
 }
 
 static void updateGallery(u32 down)
 {
+	if (app.confirmDelete)
+	{
+		Hit hit = released ? uiDeleteDialogHit(touchX, touchY) : HIT_NONE;
+		if ((down & KEY_X) || hit == HIT_DELETE)
+		{
+			app.confirmDelete = false;
+			deleteSelected();
+		}
+		else if ((down & KEY_B) || hit == HIT_CANCEL)
+			app.confirmDelete = false;
+		return;
+	}
+
 	if (down & KEY_B)
 	{
-		status[0] = 0;
 		camResume();
-		mode = MODE_CAMERA;
+		setMode(MODE_CAMERA);
 		return;
 	}
-	if (!shotCount || !down)
+	if (!app.shotCount)
 		return;
 
-	bool wasConfirm = confirmDelete;
-	confirmDelete = false;
-
-	int prev = sel;
-	if (down & KEY_RIGHT) sel++;
-	if (down & KEY_LEFT) sel--;
-	if (down & KEY_DOWN) sel += GRID_COLS;
-	if (down & KEY_UP) sel -= GRID_COLS;
+	int prev = app.sel;
+	if (down & KEY_RIGHT) app.sel++;
+	if (down & KEY_LEFT) app.sel--;
+	if (down & KEY_DOWN) app.sel += GRID_COLS;
+	if (down & KEY_UP) app.sel -= GRID_COLS;
 	if (down & KEY_TOUCH)
 	{
-		touchPosition t;
-		hidTouchRead(&t);
-		if (t.py < GRID_ROWS * CELL_H)
-			sel = (sel / PAGE) * PAGE + (t.py / CELL_H) * GRID_COLS + t.px / CELL_W;
+		int cell = cellAt(touchX, touchY);
+		int idx = (app.sel / GRID_PAGE) * GRID_PAGE + cell;
+		if (cell >= 0 && idx < app.shotCount)
+		{
+			// Tapping the selected shot opens it.
+			if (idx == app.sel)
+			{
+				openShot(app.shots[idx]);
+				return;
+			}
+			app.sel = idx;
+		}
 	}
-	if (sel < 0) sel = 0;
-	if (sel >= shotCount) sel = shotCount - 1;
-	if (sel != prev)
-		status[0] = 0;
+	if (app.sel < 0) app.sel = 0;
+	if (app.sel >= app.shotCount) app.sel = app.shotCount - 1;
+	if (app.sel != prev)
+	{
+		selChangedAt = osGetTime();
+		loadPage();
+	}
 
 	if (down & KEY_A)
-		openShot(shots[sel]);
+		openShot(app.shots[app.sel]);
 	else if (down & KEY_X)
+		app.confirmDelete = true;
+	else if (previewTried != app.shots[app.sel] && osGetTime() - selChangedAt > PREVIEW_DELAY_MS)
 	{
-		if (wasConfirm)
-			deleteSelected();
-		else
-			confirmDelete = true;
+		previewTried = app.shots[app.sel];
+		app.previewNum = storageLoadPreview(previewTried, app.previewL, app.previewR) ? previewTried : -1;
 	}
 }
 
@@ -350,12 +340,26 @@ int main(void)
 	gfxSetScreenFormat(GFX_BOTTOM, GSP_RGB565_OES);
 	gfxSetDoubleBuffering(GFX_TOP, true);
 	gfxSetDoubleBuffering(GFX_BOTTOM, true);
-	storageInit();
 
-	if (camOpen())
+	filterInit();
+	storageInit();
+	refreshLastThumb();
+	app.shotL = shotL;
+	app.shotR = shotR;
+	app.shotNum = -1;
+	app.previewNum = -1;
+	app.gridPage = -1;
+	app.delayMs = 120;
+	app.chipScroll = 12;
+
+	app.camOk = camOpen();
+	if (app.camOk)
+	{
 		camResume();
-	else
-		snprintf(status, sizeof(status), "Kamera-Fehler!");
+		app.liveL = camLeft();
+		app.liveR = camRight();
+	}
+	setMode(MODE_CAMERA);
 
 	while (aptMainLoop())
 	{
@@ -364,23 +368,29 @@ int main(void)
 		if (down & KEY_START)
 			break;
 
-		Mode before = mode;
-		switch (mode)
+		bool nowTouching = held & KEY_TOUCH;
+		released = touching && !nowTouching;
+		if (nowTouching)
 		{
-		case MODE_CAMERA: updateCamera(down); break;
-		case MODE_REVIEW: updateReview(down, held); break;
+			touchPosition t;
+			hidTouchRead(&t);
+			if (!touching)
+			{
+				startX = t.px;
+				startY = t.py;
+			}
+			touchX = t.px;
+			touchY = t.py;
+		}
+		touching = nowTouching;
+
+		switch (app.mode)
+		{
+		case MODE_CAMERA: updateCamera(down, held); break;
+		case MODE_REVIEW: updateReview(down); break;
 		case MODE_GALLERY: updateGallery(down); break;
 		}
-		if (mode != before)
-			continue;
-
-		switch (mode)
-		{
-		case MODE_CAMERA: drawCamera(); break;
-		case MODE_REVIEW: drawReview(); break;
-		case MODE_GALLERY: drawGallery(); break;
-		}
-		swap();
+		render();
 	}
 
 	camClose();

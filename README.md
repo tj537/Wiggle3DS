@@ -6,15 +6,18 @@ Homebrew-App für den New 3DS (XL): Sie nimmt ein 3D-Foto mit beiden Außenkamer
 
 1. 2-Bild-Wiggle: Den Drehpunkt per Touch wählen, dann als GIF auf die SD-Karte exportieren.
 2. Zwischenbilder aus einer Tiefenschätzung berechnen, damit die Kamerafahrt flüssig wird.
-3. Filter, Icon und Banner.
+3. Icon, Banner und CIA für das HOME-Menü.
 
 Aktueller Stand: Schritt 1 ist fertig. Die App nimmt in 640x480 auf, und jedes GIF bekommt eine eigene Palette, die aus seinen Farben berechnet wird. Dazu gibt es eine Galerie.
 
 ## Bedienung
 
-- **Kamera:** A, L oder R macht ein Foto, Y öffnet die Galerie, START beendet die App.
-- **Bearbeiten:** Tipp auf den Drehpunkt, mit ◀/▶ justierst du fein, mit ▲/▼ stellst du das Tempo ein. A speichert, B geht zurück.
-- **Galerie:** Mit dem Steuerkreuz oder per Touch wählst du eine Aufnahme aus. A öffnet sie, zweimal X löscht sie, B bringt dich zur Kamera.
+- **Kamera:** Mit A, L oder R oder durch Antippen des Auslösers machst du ein Foto. Den Filter wählst du mit ◀/▶ oder per Touch auf die Filterleiste, Y oder das Vorschaubild öffnet die Galerie.
+- **Bearbeiten:** Tipp auf das Motiv, um den Drehpunkt zu setzen, mit L/R justierst du fein. Das Tempo stellst du mit dem Regler oder mit ▲/▼ ein, den Filter mit ◀/▶. A speichert, B geht zurück.
+- **Galerie:** Mit dem Steuerkreuz oder per Touch wählst du aus, ein zweites Antippen oder A öffnet die Aufnahme. X löscht nach einer Rückfrage, B bringt dich zur Kamera.
+- **3D-Regler:** In der Kamera, beim Bearbeiten und in der Galerie zeigt der obere Screen die Aufnahme dann in echtem 3D.
+
+Filter: Original, S/W, Noir, Sepia, Vintage, Pop, Kühl.
 
 ## Dateien auf der SD-Karte
 
@@ -41,3 +44,18 @@ Wichtig: Im Pfad zum Projektordner dürfen keine Leerzeichen sein, sonst bricht 
 ```
 
 Falls der 3DS nicht automatisch gefunden wird, häng die angezeigte IP-Adresse mit `-a <IP>` an.
+
+## Werkzeuge
+
+- `tools/genfont.swift` erzeugt `source/font_data.c` aus den Inter-Schriften in `fonts/` (SIL Open Font License):
+
+  ```bash
+  swift tools/genfont.swift source/font_data.c fontSmall:fonts/Inter-Medium.ttf:10.5 fontBody:fonts/Inter-SemiBold.ttf:12.5 fontTitle:fonts/Inter-Bold.ttf:19 fontHuge:fonts/Inter-Bold.ttf:30
+  ```
+
+- `tools/preview.c` rendert alle Screens am Mac als BMP, damit du die Oberfläche ohne 3DS prüfen kannst (Eingabe: ein rohes RGB565-Stereopaar mit 640x480):
+
+  ```bash
+  clang -O2 -I/opt/devkitpro/libctru/include -o preview tools/preview.c source/ui.c source/draw.c source/font_data.c source/filter.c source/wiggle.c -lm
+  ./preview paar.raw ausgabe/
+  ```

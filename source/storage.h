@@ -8,12 +8,16 @@
 #define DIR_GIF DIR_ROOT "/GIF"
 #define DIR_PHOTO DIR_ROOT "/Fotos"
 
-#define THUMB_W 160
-#define THUMB_H 120
+// Aligned crops, downscaled: a small one for the grid, a screen-sized one
+// for the top screen preview (both eyes).
+#define THUMB_W 80
+#define THUMB_H 60
+#define PREVIEW_W 320
+#define PREVIEW_H 240
 
 typedef struct
 {
-	s32 pivotX, pivotY, dx, dy, delayMs;
+	s32 pivotX, pivotY, dx, dy, delayMs, filter;
 } ShotInfo;
 
 void storageInit(void);
@@ -22,9 +26,10 @@ int storageList(int *nums, int max);
 int storageNextNumber(void);
 void storageGifPath(int num, char *buf, size_t size);
 
-// Also stores two aligned thumbnails, so the gallery can wiggle without
-// loading the full images.
+// Also stores the thumbnail and previews, so the gallery can show and
+// wiggle shots without loading the full images.
 bool storageSave(int num, const u16 *left, const u16 *right, const ShotInfo *info);
 bool storageLoad(int num, u16 *left, u16 *right, ShotInfo *info);
-bool storageLoadThumbs(int num, u16 *thumbL, u16 *thumbR);
+bool storageLoadThumb(int num, u16 *thumb, ShotInfo *info);
+bool storageLoadPreview(int num, u16 *previewL, u16 *previewR);
 void storageDelete(int num);

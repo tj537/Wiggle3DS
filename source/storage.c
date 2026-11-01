@@ -8,8 +8,9 @@
 #include "storage.h"
 #include "wiggle.h"
 
-#define MAGIC "W3D1"
+#define MAGIC "W3D2"
 #define THUMB_PIXELS (THUMB_W * THUMB_H)
+#define PREVIEW_PIXELS (PREVIEW_W * PREVIEW_H)
 #define IMAGE_PIXELS (CAM_W * CAM_H)
 
 typedef struct
@@ -63,19 +64,37 @@ int storageNextNumber(void)
 	return count ? nums[0] + 1 : 1;
 }
 
-static void makeThumb(u16 *dst, const u16 *img, int sx, int sy, int w, int h)
+// Area-averaging downscale of the w*h region at (sx, sy) to dw*dh.
+static void downscale(u16 *dst, int dw, int dh, const u16 *img, int sx, int sy, int w, int h)
 {
-	for (int y = 0; y < THUMB_H; y++)
-		for (int x = 0; x < THUMB_W; x++)
-			dst[y * THUMB_W + x] = img[(sy + y * h / THUMB_H) * CAM_W + sx + x * w / THUMB_W];
+	for (int y = 0; y < dh; y++)
+	{
+		int y0 = sy + y * h / dh, y1 = sy + (y + 1) * h / dh;
+		for (int x = 0; x < dw; x++)
+		{
+			int x0 = sx + x * w / dw, x1 = sx + (x + 1) * w / dw;
+			u32 r = 0, g = 0, b = 0, n = 0;
+			for (int yy = y0; yy < y1; yy++)
+				for (int xx = x0; xx < x1; xx++)
+				{
+					u16 p = img[yy * CAM_W + xx];
+					r += p >> 11;
+					g += (p >> 5) & 63;
+					b += p & 31;
+					n++;
+				}
+			dst[y * dw + x] = ((r / n) << 11) | ((g / n) << 5) | (b / n);
+		}
+	}
 }
 
 bool storageSave(int num, const u16 *left, const u16 *right, const ShotInfo *info)
 {
-	static u16 thumbL[THUMB_PIXELS], thumbR[THUMB_PIXELS];
+	static u16 thumb[THUMB_PIXELS], previewL[PREVIEW_PIXELS], previewR[PREVIEW_PIXELS];
 	Crop c = wiggleCrop((Offset){info->dx, info->dy});
-	makeThumb(thumbL, left, c.lx, c.ly, c.w, c.h);
-	makeThumb(thumbR, right, c.rx, c.ry, c.w, c.h);
+	downscale(thumb, THUMB_W, THUMB_H, left, c.lx, c.ly, c.w, c.h);
+	downscale(previewL, PREVIEW_W, PREVIEW_H, left, c.lx, c.ly, c.w, c.h);
+	downscale(previewR, PREVIEW_W, PREVIEW_H, right, c.rx, c.ry, c.w, c.h);
 
 	char path[64];
 	photoPath(num, path, sizeof(path));
@@ -85,8 +104,9 @@ bool storageSave(int num, const u16 *left, const u16 *right, const ShotInfo *inf
 	setvbuf(f, NULL, _IOFBF, 64 * 1024);
 	Header h = {MAGIC, *info};
 	fwrite(&h, sizeof(h), 1, f);
-	fwrite(thumbL, 2, THUMB_PIXELS, f);
-	fwrite(thumbR, 2, THUMB_PIXELS, f);
+	fwrite(thumb, 2, THUMB_PIXELS, f);
+	fwrite(previewL, 2, PREVIEW_PIXELS, f);
+	fwrite(previewR, 2, PREVIEW_PIXELS, f);
 	fwrite(left, 2, IMAGE_PIXELS, f);
 	fwrite(right, 2, IMAGE_PIXELS, f);
 	bool ok = !ferror(f);
@@ -110,23 +130,38 @@ static FILE *openPhoto(int num, ShotInfo *info)
 	return f;
 }
 
+static bool readAt(FILE *f, long offset, u16 *dst, size_t pixels)
+{
+	return fseek(f, sizeof(Header) + offset * 2, SEEK_SET) == 0 && fread(dst, 2, pixels, f) == pixels;
+}
+
 bool storageLoad(int num, u16 *left, u16 *right, ShotInfo *info)
 {
 	FILE *f = openPhoto(num, info);
 	if (!f)
 		return false;
-	fseek(f, THUMB_PIXELS * 2 * 2, SEEK_CUR);
-	bool ok = fread(left, 2, IMAGE_PIXELS, f) == IMAGE_PIXELS && fread(right, 2, IMAGE_PIXELS, f) == IMAGE_PIXELS;
+	long base = THUMB_PIXELS + 2 * PREVIEW_PIXELS;
+	bool ok = readAt(f, base, left, IMAGE_PIXELS) && readAt(f, base + IMAGE_PIXELS, right, IMAGE_PIXELS);
 	fclose(f);
 	return ok;
 }
 
-bool storageLoadThumbs(int num, u16 *thumbL, u16 *thumbR)
+bool storageLoadThumb(int num, u16 *thumb, ShotInfo *info)
+{
+	FILE *f = openPhoto(num, info);
+	if (!f)
+		return false;
+	bool ok = readAt(f, 0, thumb, THUMB_PIXELS);
+	fclose(f);
+	return ok;
+}
+
+bool storageLoadPreview(int num, u16 *previewL, u16 *previewR)
 {
 	FILE *f = openPhoto(num, NULL);
 	if (!f)
 		return false;
-	bool ok = fread(thumbL, 2, THUMB_PIXELS, f) == THUMB_PIXELS && fread(thumbR, 2, THUMB_PIXELS, f) == THUMB_PIXELS;
+	bool ok = readAt(f, THUMB_PIXELS, previewL, PREVIEW_PIXELS) && readAt(f, THUMB_PIXELS + PREVIEW_PIXELS, previewR, PREVIEW_PIXELS);
 	fclose(f);
 	return ok;
 }
