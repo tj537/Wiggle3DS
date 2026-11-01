@@ -4,11 +4,10 @@
 
 #define FRAME_BYTES (CAM_W * CAM_H * 2)
 
-// Two frame buffers (each holding both eyes): the camera fills the back one
-// while the UI reads the front one, so the preview never shows half a frame.
-static u16 *bufs[2];
-static int front;
-static bool got[2]; // eye already received into the back buffer
+// Two buffers per eye: the camera fills the back one while the UI reads the
+// front one, so the preview never shows half a frame.
+static u16 *bufs[2][2]; // [eye][buffer]
+static int front[2];
 static u32 transferUnit;
 // 0/1: buffer error events for CAM1/CAM2, 2/3: receive events for CAM1/CAM2.
 static Handle events[4];
@@ -25,9 +24,10 @@ static void closeEvent(int i)
 
 bool camOpen(void)
 {
-	bufs[0] = calloc(1, FRAME_BYTES * 2);
-	bufs[1] = calloc(1, FRAME_BYTES * 2);
-	if (!bufs[0] || !bufs[1] || R_FAILED(camInit()))
+	for (int i = 0; i < 4; i++)
+		if (!(bufs[i / 2][i % 2] = calloc(1, FRAME_BYTES)))
+			return false;
+	if (R_FAILED(camInit()))
 		return false;
 
 	CAMU_SetSize(SELECT_OUT1_OUT2, SIZE_VGA, CONTEXT_A);
@@ -65,7 +65,6 @@ void camPause(void)
 	CAMU_StopCapture(PORT_BOTH);
 	closeEvent(2);
 	closeEvent(3);
-	got[0] = got[1] = false;
 	CAMU_Activate(SELECT_NONE);
 	running = false;
 }
@@ -76,9 +75,11 @@ void camClose(void)
 	closeEvent(0);
 	closeEvent(1);
 	camExit();
-	free(bufs[0]);
-	free(bufs[1]);
-	bufs[0] = bufs[1] = NULL;
+	for (int i = 0; i < 4; i++)
+	{
+		free(bufs[i / 2][i % 2]);
+		bufs[i / 2][i % 2] = NULL;
+	}
 }
 
 bool camPoll(void)
@@ -86,13 +87,11 @@ bool camPoll(void)
 	if (!running)
 		return false;
 
-	// An eye is re-armed only after the frame swap, so it can't overwrite
-	// its half of the back buffer while the other eye is still arriving.
-	u16 *back = bufs[front ^ 1];
-	if (!events[2] && !got[0])
-		CAMU_SetReceiving(&events[2], back, PORT_CAM1, FRAME_BYTES, (s16)transferUnit);
-	if (!events[3] && !got[1])
-		CAMU_SetReceiving(&events[3], back + CAM_W * CAM_H, PORT_CAM2, FRAME_BYTES, (s16)transferUnit);
+	// Each eye is re-armed right away, into the buffer that isn't shown.
+	for (int eye = 0; eye < 2; eye++)
+		if (!events[2 + eye])
+			CAMU_SetReceiving(&events[2 + eye], bufs[eye][front[eye] ^ 1], eye ? PORT_CAM2 : PORT_CAM1,
+			                  FRAME_BYTES, (s16)transferUnit);
 	if (interrupted)
 	{
 		CAMU_StartCapture(PORT_BOTH);
@@ -115,18 +114,13 @@ bool camPoll(void)
 	{
 		// Buffer error: drop that eye's transfer and restart capture.
 		closeEvent(ev + 2);
-		got[ev] = false;
 		interrupted = true;
 		return false;
 	}
 	closeEvent(ev);
-	got[ev - 2] = true;
-	if (!got[0] || !got[1])
-		return false;
-	front ^= 1;
-	got[0] = got[1] = false;
+	front[ev - 2] ^= 1;
 	return true;
 }
 
-const u16 *camLeft(void) { return bufs[front]; }
-const u16 *camRight(void) { return bufs[front] + CAM_W * CAM_H; }
+const u16 *camLeft(void) { return bufs[0][front[0]]; }
+const u16 *camRight(void) { return bufs[1][front[1]]; }
