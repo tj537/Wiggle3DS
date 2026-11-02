@@ -31,10 +31,22 @@ include $(DEVKITARM)/3ds_rules
 #     - icon.png
 #     - <libctru folder>/default_icon.png
 #---------------------------------------------------------------------------------
-TARGET		:=	$(notdir $(CURDIR))
+TARGET		:=	Wiggle3DS
 APP_TITLE := Wiggle3DS
 APP_DESCRIPTION := 3D-Fotos als Wigglegram-GIF
 APP_AUTHOR := Tom
+ICON		:=	meta/icon.png
+
+# CIA (HOME menu). Unique ID and product code stay fixed forever, so a newer CIA
+# replaces the installed title. Raise the version for each release.
+APP_UNIQUE_ID		:=	0xF57E3
+APP_PRODUCT_CODE	:=	CTR-H-WGLS
+APP_VERSION		:=	1.0.0
+RSF			:=	meta/cia.rsf
+BANNER_IMAGE		:=	meta/banner.png
+BANNER_AUDIO		:=	meta/banner.wav
+MAKEROM			?=	makerom
+BANNERTOOL		?=	bannertool
 BUILD		:=	build
 SOURCES		:=	source
 DATA		:=	data
@@ -161,7 +173,7 @@ ifneq ($(ROMFS),)
 	export _3DSXFLAGS += --romfs=$(CURDIR)/$(ROMFS)
 endif
 
-.PHONY: all clean
+.PHONY: all clean cia send-cia
 
 #---------------------------------------------------------------------------------
 all: $(BUILD) $(GFXBUILD) $(DEPSDIR) $(ROMFS_T3XFILES) $(T3XHFILES)
@@ -183,7 +195,25 @@ endif
 #---------------------------------------------------------------------------------
 clean:
 	@echo clean ...
-	@rm -fr $(BUILD) $(TARGET).3dsx $(OUTPUT).smdh $(TARGET).elf $(GFXBUILD)
+	@rm -fr $(BUILD) $(TARGET).3dsx $(OUTPUT).smdh $(TARGET).elf $(TARGET).cia $(GFXBUILD)
+
+#---------------------------------------------------------------------------------
+cia: all
+	@$(BANNERTOOL) makebanner -i $(BANNER_IMAGE) -a $(BANNER_AUDIO) -o $(BUILD)/banner.bnr >/dev/null
+	@$(BANNERTOOL) makesmdh -s "$(APP_TITLE)" -l "$(APP_DESCRIPTION)" -p "$(APP_AUTHOR)" \
+		-i $(ICON) -o $(BUILD)/icon.icn >/dev/null
+	@$(MAKEROM) -f cia -o $(TARGET).cia -target t -exefslogo -rsf $(RSF) \
+		-elf $(TARGET).elf -icon $(BUILD)/icon.icn -banner $(BUILD)/banner.bnr \
+		-major $(word 1,$(subst ., ,$(APP_VERSION))) -minor $(word 2,$(subst ., ,$(APP_VERSION))) \
+		-micro $(word 3,$(subst ., ,$(APP_VERSION))) \
+		-DAPP_TITLE="$(APP_TITLE)" -DAPP_PRODUCT_CODE="$(APP_PRODUCT_CODE)" \
+		-DAPP_UNIQUE_ID="$(APP_UNIQUE_ID)"
+	@echo built ... $(TARGET).cia
+
+# Serves the CIA over WiFi with a QR code for FBI (Remote Install -> Scan QR Code).
+# make send-cia IP=192.168.x.y also pushes it to FBI's "Receive URLs over the network".
+send-cia: cia
+	@python3 tools/send-cia.py $(TARGET).cia $(if $(IP),--push $(IP))
 
 #---------------------------------------------------------------------------------
 $(GFXBUILD)/%.t3x	$(BUILD)/%.h	:	%.t3s

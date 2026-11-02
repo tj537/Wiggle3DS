@@ -50,6 +50,40 @@ Wichtig: Im Pfad zum Projektordner dürfen keine Leerzeichen sein, sonst bricht 
 
 Falls der 3DS nicht automatisch gefunden wird, häng die angezeigte IP-Adresse mit `-a <IP>` an.
 
+## Als CIA ins HOME-Menü
+
+Fertige Versionen installierst du als CIA mit [FBI](https://github.com/lifehackerhansol/FBI). Dann startet Wiggle3DS direkt aus dem HOME-Menü, mit eigenem Icon, Banner und Ton.
+
+Zusätzlich brauchst du `makerom` ([Project_CTR](https://github.com/3DSGuy/Project_CTR/releases)) und `bannertool` ([3ds-bannertool](https://github.com/carstene1ns/3ds-bannertool)) im `PATH`, zum Beispiel in `~/.local/bin`. Dann:
+
+```bash
+make cia
+```
+
+Das erzeugt `Wiggle3DS.cia`. Die Title-ID ist fest (Unique ID `0xF57E3`, Product Code `CTR-H-WGLS`). Eine neue CIA ersetzt also die installierte Version, statt ein zweites Icon anzulegen. Für eine neue Version erhöhst du `APP_VERSION` im `Makefile`.
+
+Vor dem Installieren musst du Wiggle3DS schließen. Deine Fotos und GIFs in `Wiggle3DS/` auf der SD-Karte bleiben dabei unverändert, auch beim Ersetzen oder Deinstallieren.
+
+### Über WLAN
+
+```bash
+make send-cia
+```
+
+Der Mac baut die CIA, stellt sie im WLAN bereit (Port 8080) und zeigt im Terminal einen QR-Code mit der Adresse. Auf dem 3DS öffnest du FBI, wählst **Remote Install → Scan QR Code** und hältst die Kamera auf den QR-Code. Mac und 3DS müssen im selben WLAN sein. Der Server beendet sich, sobald der 3DS die Datei geladen hat.
+
+Wenn der QR-Code im Terminal zu klein ist, öffnet `python3 tools/send-cia.py Wiggle3DS.cia --open` ihn groß im Browser.
+
+Ohne QR-Code: Wähl in FBI **Remote Install → Receive URLs over the network**. FBI zeigt dann die IP des 3DS an. Am Mac:
+
+```bash
+make send-cia IP=192.168.x.y
+```
+
+### Über die SD-Karte
+
+Kopier `Wiggle3DS.cia` auf die SD-Karte, zum Beispiel nach `cias/`. In FBI öffnest du **SD → cias**, wählst die Datei und dann **Install and delete CIA** (oder **Install CIA**).
+
 ## Fremder Code
 
 - `source/qrcodegen.c/.h`: [QR Code generator](https://github.com/nayuki/QR-Code-generator) von Project Nayuki (MIT-Lizenz)
@@ -62,6 +96,14 @@ Falls der 3DS nicht automatisch gefunden wird, häng die angezeigte IP-Adresse m
   ```bash
   swift tools/genfont.swift source/font_data.c fontSmall:fonts/Inter-Medium.ttf:10.5 fontBody:fonts/Inter-SemiBold.ttf:12.5 fontTitle:fonts/Inter-Bold.ttf:19
   ```
+
+- `tools/genmeta.swift` erzeugt Icon (48x48), Banner (256x128) und Banner-Ton in `meta/` aus den Inter-Schriften:
+
+  ```bash
+  swift tools/genmeta.swift meta
+  ```
+
+- `tools/send-cia.py` stellt die CIA im WLAN bereit (siehe oben). Den QR-Code baut `tools/qrtext.c` mit demselben qrcodegen wie die App.
 
 - `tools/preview.c` rendert alle Screens am Mac als BMP, damit du die Oberfläche ohne 3DS prüfen kannst (Eingabe: ein rohes RGB565-Stereopaar mit 640x480):
 
