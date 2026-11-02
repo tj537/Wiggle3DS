@@ -111,22 +111,33 @@ static int listGifs(int *nums, int max)
 	return count;
 }
 
-static const char pageHead[] =
+static const char pageHead[] = // printf format: colors below
 	"<!doctype html><html><head><meta charset=\"utf-8\">"
 	"<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Wiggle3DS</title><style>"
-	"body{margin:0;background:#140b24;color:#f8f5ff;font:16px -apple-system,system-ui,sans-serif}"
+	"body{margin:0;background:#%06lx;color:#f8f5ff;font:16px -apple-system,system-ui,sans-serif}"
 	"header{padding:24px 16px 4px}"
-	"h1{margin:0;font-size:30px;display:inline-block;background:linear-gradient(90deg,#7c4dff,#d66eff);"
+	"h1{margin:0;font-size:30px;display:inline-block;background:linear-gradient(90deg,#%06lx,#%06lx);"
 	"-webkit-background-clip:text;background-clip:text;color:transparent}"
-	"p{color:#a094be;margin:6px 0 0;font-size:14px}"
+	"p{color:#%06lx;margin:6px 0 0;font-size:14px}"
 	".grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;padding:16px}"
-	"figure{margin:0;background:#241a3a;border-radius:16px;overflow:hidden}"
-	"img{display:block;width:100%;height:auto}"
-	"figcaption{display:flex;justify-content:space-between;align-items:center;padding:8px 10px 8px 12px;font-size:13px;color:#a094be}"
-	"a{color:#fff;background:linear-gradient(90deg,#7c4dff,#d66eff);padding:5px 12px;border-radius:99px;text-decoration:none;font-weight:600}"
-	".empty{padding:32px 16px;color:#a094be}"
+	"figure{margin:0;background:#%06lx;border-radius:16px;overflow:hidden}"
+	"img{display:block;width:100%%;height:auto}"
+	"figcaption{display:flex;justify-content:space-between;align-items:center;padding:8px 10px 8px 12px;font-size:13px;color:#%06lx}"
+	"a{color:#fff;background:linear-gradient(90deg,#%06lx,#%06lx);padding:5px 12px;border-radius:99px;text-decoration:none;font-weight:600}"
+	".empty{padding:32px 16px;color:#%06lx}"
 	"</style></head><body><header><h1>Wiggle3DS</h1>"
 	"<p>Press and hold a GIF, then choose \xe2\x80\x9cSave to Photos\xe2\x80\x9d.</p></header>";
+
+static unsigned long colBg = 0x140b24, colCard = 0x241a3a, colDim = 0xa094be, colAcc0 = 0x7c4dff, colAcc1 = 0xd66eff;
+
+void shareSetColors(u32 bg, u32 card, u32 dim, u32 acc0, u32 acc1)
+{
+	colBg = bg;
+	colCard = card;
+	colDim = dim;
+	colAcc0 = acc0;
+	colAcc1 = acc1;
+}
 
 static void sendPage(int fd)
 {
@@ -136,7 +147,8 @@ static void sendPage(int fd)
 	char *body = malloc(cap);
 	if (!body)
 		return;
-	size_t len = snprintf(body, cap, "%s", pageHead);
+	// Order of the colors in pageHead.
+	size_t len = snprintf(body, cap, pageHead, colBg, colAcc0, colAcc1, colDim, colCard, colDim, colAcc0, colAcc1, colDim);
 	if (!count)
 		len += snprintf(body + len, cap - len, "<div class=\"empty\">No GIFs yet. Save one in Wiggle3DS first.</div>");
 	else

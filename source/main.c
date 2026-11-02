@@ -83,6 +83,109 @@ static void render(void)
 	gspWaitForVBlank();
 }
 
+// ---- settings ----
+
+#define SETTINGS_PATH DIR_ROOT "/settings.txt"
+
+static void loadSettings(void)
+{
+	Settings *st = &app.settings;
+	*st = (Settings){.theme = 0, .smooth = 0, .delayMs = 120, .gifHalf = false, .fps = 20, .flash = true};
+	FILE *f = fopen(SETTINGS_PATH, "r");
+	if (!f)
+		return;
+	char key[32];
+	int v;
+	while (fscanf(f, " %31[^=]=%d", key, &v) == 2)
+	{
+		if (!strcmp(key, "theme") && v >= 0 && v < THEME_COUNT) st->theme = v;
+		else if (!strcmp(key, "smooth") && v >= 0 && v < SMOOTH_LEVELS) st->smooth = v;
+		else if (!strcmp(key, "speed") && v >= DELAY_MIN && v <= DELAY_MAX) st->delayMs = v;
+		else if (!strcmp(key, "gif_half")) st->gifHalf = v;
+		else if (!strcmp(key, "fps") && (v == 15 || v == 20 || v == 30)) st->fps = v;
+		else if (!strcmp(key, "flash")) st->flash = v;
+	}
+	fclose(f);
+}
+
+static void saveSettings(void)
+{
+	const Settings *st = &app.settings;
+	FILE *f = fopen(SETTINGS_PATH, "w");
+	if (!f)
+		return;
+	fprintf(f, "theme=%d\nsmooth=%d\nspeed=%d\ngif_half=%d\nfps=%d\nflash=%d\n",
+	        st->theme, st->smooth, st->delayMs, st->gifHalf, st->fps, st->flash);
+	fclose(f);
+}
+
+static void applyTheme(void)
+{
+	int t = app.settings.theme;
+	uiSetTheme(t);
+	shareSetColors(uiThemeRgb(t, 1), uiThemeRgb(t, 3), uiThemeRgb(t, 6), uiThemeRgb(t, 7), uiThemeRgb(t, 8));
+}
+
+static void changeSetting(int row, int step)
+{
+	Settings *st = &app.settings;
+	static const int fpsSteps[3] = {15, 20, 30};
+	int i;
+	switch (row)
+	{
+	case SET_THEME:
+		st->theme = (st->theme + step + THEME_COUNT) % THEME_COUNT;
+		applyTheme();
+		break;
+	case SET_SMOOTH:
+		st->smooth = (st->smooth + step + SMOOTH_LEVELS) % SMOOTH_LEVELS;
+		break;
+	case SET_SPEED:
+		st->delayMs += step * DELAY_STEP;
+		st->delayMs = st->delayMs < DELAY_MIN ? DELAY_MIN : st->delayMs > DELAY_MAX ? DELAY_MAX : st->delayMs;
+		break;
+	case SET_GIF_SIZE:
+		st->gifHalf = !st->gifHalf;
+		break;
+	case SET_FPS:
+		for (i = 0; i < 2 && fpsSteps[i] != st->fps; i++)
+			;
+		i = (i + step + 3) % 3;
+		st->fps = fpsSteps[i];
+		if (app.camOk)
+			camSetFps(st->fps);
+		break;
+	case SET_FLASH:
+		st->flash = !st->flash;
+		break;
+	}
+	topDirty = true;
+}
+
+static void updateSettings(u32 down)
+{
+	if (down & KEY_DOWN) app.settingsSel = (app.settingsSel + 1) % SET_COUNT;
+	if (down & KEY_UP) app.settingsSel = (app.settingsSel + SET_COUNT - 1) % SET_COUNT;
+	if (down & KEY_LEFT) changeSetting(app.settingsSel, -1);
+	if (down & (KEY_RIGHT | KEY_A)) changeSetting(app.settingsSel, 1);
+	if (down & KEY_TOUCH)
+	{
+		int step, row = uiSettingsRowAt(touchX, touchY, &step);
+		if (row >= 0)
+		{
+			// Tapping a row picks it; tapping it again (or an arrow) changes it.
+			if (step || row == app.settingsSel)
+				changeSetting(row, step ? step : 1);
+			app.settingsSel = row;
+		}
+	}
+	if (down & (KEY_B | KEY_START))
+	{
+		saveSettings();
+		setMode(MODE_HOME);
+	}
+}
+
 // ---- gallery ----
 
 static void loadPage(void)
@@ -136,15 +239,16 @@ static void capture(void)
 	memcpy(shotR, camRight(), sizeof(shotR));
 	camPause();
 	setMode(MODE_REVIEW);
-	app.flashAt = osGetTime();
+	if (app.settings.flash)
+		app.flashAt = osGetTime();
 	wiggleSetImages(shotL, shotR);
 	app.shotNum = -1;
 	app.pivotX = CAM_W / 2;
 	app.pivotY = CAM_H / 2;
 	app.offset = wiggleMatch(app.pivotX, app.pivotY);
-	app.delayMs = 120;
+	app.delayMs = app.settings.delayMs;
 	app.shotFilter = app.filter;
-	app.shotSmooth = 1;
+	app.shotSmooth = app.settings.smooth;
 	app.fromGallery = false;
 }
 
@@ -219,7 +323,18 @@ static void saveShot(void)
 		filterApply(bufs[right], shotR, CAM_W, c.rx, c.ry, c.w, c.h, app.shotFilter);
 		for (int i = 1; i < right; i++)
 			blendRows(bufs[i], bufs[0], bufs[right], pixels, mix[i]);
-		ok = storageSave(app.shotNum, shotL, shotR, &info) && gifWrite(path, frames, n, c.w, c.h, app.delayMs);
+		int gw = c.w, gh = c.h;
+		if (app.settings.gifHalf)
+		{
+			// Halve in place: each frame's buffer has room for the bigger image.
+			for (int i = 0; i <= right; i++)
+				halveRows(bufs[i], bufs[i], c.w, c.h);
+			gw = c.w / 2;
+			gh = c.h / 2;
+			for (int i = 0; i < n; i++)
+				frames[i].stride = gw;
+		}
+		ok = storageSave(app.shotNum, shotL, shotR, &info) && gifWrite(path, frames, n, gw, gh, app.delayMs);
 	}
 	for (int i = 0; i < n; i++)
 		free(bufs[i]);
@@ -398,6 +513,12 @@ static void updateHome(u32 down)
 		return;
 	}
 
+	if (released && uiGearHit(startX, startY) && uiGearHit(touchX, touchY))
+	{
+		app.settingsSel = 0;
+		setMode(MODE_SETTINGS);
+		return;
+	}
 	if ((down & KEY_SELECT) || (released && uiShareButtonHit(startX, startY) && uiShareButtonHit(touchX, touchY)))
 	{
 		openShare();
@@ -489,15 +610,18 @@ int main(void)
 	filterInit();
 	osSetSpeedupEnable(false);
 	storageInit();
+	loadSettings();
+	applyTheme();
 	app.shotL = shotL;
 	app.shotR = shotR;
 	app.shotNum = -1;
-	app.delayMs = 120;
+	app.delayMs = app.settings.delayMs;
 	refreshGallery();
 
 	app.camOk = camOpen();
 	if (app.camOk)
 	{
+		camSetFps(app.settings.fps);
 		camResume();
 		app.liveL = camLeft();
 		app.liveR = camRight();
@@ -508,7 +632,7 @@ int main(void)
 	{
 		hidScanInput();
 		u32 down = hidKeysDown(), held = hidKeysHeld();
-		if (down & KEY_START)
+		if ((down & KEY_START) && app.mode != MODE_SETTINGS)
 			break;
 
 		bool nowTouching = held & KEY_TOUCH;
@@ -533,6 +657,8 @@ int main(void)
 			updateHome(down);
 		else if (app.mode == MODE_REVIEW)
 			updateReview(down);
+		else if (app.mode == MODE_SETTINGS)
+			updateSettings(down);
 		else
 			updateShare(down);
 		render();

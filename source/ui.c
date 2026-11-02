@@ -4,16 +4,34 @@
 #include "filter.h"
 #include "qrcodegen.h"
 
-// Dark purple theme.
-#define C_BG_TOP COL565(30, 18, 52)
-#define C_BG_BOTTOM COL565(11, 7, 20)
-#define C_SURFACE COL565(36, 26, 58)
-#define C_SURFACE2 COL565(52, 40, 80)
-#define C_STROKE COL565(84, 66, 122)
-#define C_TEXT COL565(248, 245, 255)
-#define C_DIM COL565(160, 148, 190)
-#define C_ACC0 COL565(124, 77, 255)
-#define C_ACC1 COL565(214, 110, 255)
+// Color themes; RGB triples, converted when a theme is picked.
+typedef struct
+{
+	const char *name;
+	u8 c[9][3]; // bg top, bg bottom, surface, surface2, stroke, text, dim, accent 0, accent 1
+} Theme;
+
+static const Theme themes[THEME_COUNT] = {
+	{"Purple", {{30, 18, 52}, {11, 7, 20}, {36, 26, 58}, {52, 40, 80}, {84, 66, 122}, {248, 245, 255}, {160, 148, 190}, {124, 77, 255}, {214, 110, 255}}},
+	{"Neon", {{22, 20, 34}, {9, 9, 15}, {30, 29, 44}, {44, 42, 62}, {70, 66, 96}, {246, 245, 250}, {150, 147, 172}, {255, 61, 154}, {255, 140, 64}}},
+	{"Ocean", {{14, 24, 44}, {6, 10, 20}, {20, 34, 58}, {30, 50, 80}, {50, 78, 120}, {244, 248, 255}, {140, 160, 190}, {40, 120, 255}, {40, 210, 230}}},
+	{"Mint", {{12, 32, 30}, {5, 13, 13}, {18, 44, 42}, {28, 62, 58}, {48, 94, 88}, {240, 255, 250}, {140, 180, 170}, {20, 180, 130}, {130, 220, 100}}},
+	{"Sunset", {{40, 16, 20}, {16, 6, 8}, {54, 24, 30}, {76, 36, 44}, {110, 56, 64}, {255, 246, 240}, {190, 150, 150}, {240, 60, 70}, {250, 170, 50}}},
+	{"Mono", {{30, 30, 32}, {10, 10, 12}, {38, 38, 42}, {54, 54, 60}, {82, 82, 90}, {250, 250, 250}, {160, 160, 168}, {96, 96, 112}, {150, 150, 166}}},
+};
+
+static u16 palette[9];
+static bool bgReady;
+
+#define C_BG_TOP palette[0]
+#define C_BG_BOTTOM palette[1]
+#define C_SURFACE palette[2]
+#define C_SURFACE2 palette[3]
+#define C_STROKE palette[4]
+#define C_TEXT palette[5]
+#define C_DIM palette[6]
+#define C_ACC0 palette[7]
+#define C_ACC1 palette[8]
 #define C_RED COL565(255, 76, 92)
 #define C_BLACK 0
 #define C_WHITE 0xFFFF
@@ -26,16 +44,32 @@
 #define TOAST_MS 2600
 
 static int lineH(const Font *f) { return f->ascent + f->descent; }
+static u64 since(const App *a, u64 t) { return a->now > t ? a->now - t : 0; }
+
+void uiSetTheme(int theme)
+{
+	const Theme *t = &themes[theme >= 0 && theme < THEME_COUNT ? theme : 0];
+	for (int i = 0; i < 9; i++)
+		palette[i] = COL565(t->c[i][0], t->c[i][1], t->c[i][2]);
+	bgReady = false;
+}
+
+const char *uiThemeName(int theme) { return themes[theme].name; }
+
+u32 uiThemeRgb(int theme, int which)
+{
+	const u8 *c = themes[theme].c[which];
+	return (c[0] << 16) | (c[1] << 8) | c[2];
+}
 
 static void background(u16 *fb)
 {
-	// Rendered once; dithering every pixel each frame is not free.
+	// Rendered once per theme; dithering every pixel each frame is not free.
 	static u16 cache[320 * 240];
-	static bool ready;
-	if (!ready)
+	if (!bgReady)
 	{
 		drawGradientV(cache, 320, 0, 0, 320, 240, C_BG_TOP, C_BG_BOTTOM);
-		ready = true;
+		bgReady = true;
 	}
 	memcpy(fb, cache, sizeof(cache));
 }
@@ -218,7 +252,7 @@ void uiDrawTop(App *a, u16 *left, u16 *right, bool stereo)
 	for (int eye = 0; eye <= (stereo ? 1 : 0); eye++)
 	{
 		u16 *fb = eye ? right : left;
-		if (a->mode == MODE_HOME)
+		if (a->mode == MODE_HOME || a->mode == MODE_SETTINGS)
 			homeTop(a, fb, eye, stereo);
 		else if (a->mode == MODE_REVIEW)
 			reviewTop(a, fb, eye, stereo);
@@ -236,6 +270,16 @@ void uiDrawTop(App *a, u16 *left, u16 *right, bool stereo)
 // ---- bottom screen: home ----
 
 static int shareButtonWidth(void) { return hintWidth("SELECT", "Share") + 16; }
+
+// cos/sin of the gear's 8 teeth.
+static const float cosTable[8] = {1, 0.7071f, 0, -0.7071f, -1, -0.7071f, 0, 0.7071f};
+static const float sinTable[8] = {0, 0.7071f, 1, 0.7071f, 0, -0.7071f, -1, -0.7071f};
+
+bool uiGearHit(int x, int y)
+{
+	int cx = 308 - shareButtonWidth() - 8 - GEAR_R, cy = HEADER_BTN_Y + HEADER_BTN_H / 2;
+	return (x - cx) * (x - cx) + (y - cy) * (y - cy) <= (GEAR_R + 5) * (GEAR_R + 5);
+}
 
 static int filterButtonWidth(const App *a)
 {
@@ -324,6 +368,13 @@ static void homeBottom(App *a, u16 *fb)
 	drawRoundRect(fb, 320, 308 - sw, HEADER_BTN_Y, sw, HEADER_BTN_H, HEADER_BTN_H / 2, C_SURFACE2, 255);
 	drawHint(fb, 320, 308 - sw + 8, ty, "SELECT", "Share", C_TEXT, 255);
 
+	// Settings: a little gear left of Share.
+	float gx = 308 - sw - 8 - GEAR_R, gy = HEADER_BTN_Y + HEADER_BTN_H / 2.0f;
+	drawCircle(fb, 320, gx, gy, GEAR_R, C_SURFACE2, 255);
+	for (int i = 0; i < 8; i++)
+		drawCircle(fb, 320, gx + 6.2f * cosTable[i], gy + 6.2f * sinTable[i], 1.7f, C_TEXT, 255);
+	drawRing(fb, 320, gx, gy, 5.2f, 2.2f, C_TEXT, 255);
+
 	// Filter button: a gradient dot, the current filter and a caret.
 	int fw = filterButtonWidth(a), fx = FILTER_BTN_X;
 	drawRoundRect(fb, 320, fx, HEADER_BTN_Y, fw, HEADER_BTN_H, HEADER_BTN_H / 2, a->filterMenu ? C_STROKE : C_SURFACE2, 255);
@@ -400,7 +451,7 @@ static void reviewBottom(App *a, u16 *fb)
 	drawRing(fb, 320, px, py, 10, 2, C_TEXT, 240);
 	drawCircleGrad(fb, 320, px, py, 3.5f, C_ACC0, C_ACC1, 255);
 
-	if (!a->toast[0] || a->now - a->toastAt >= TOAST_MS) // the toast sits here
+	if (!a->toast[0] || since(a, a->toastAt) >= TOAST_MS) // the toast sits here
 	{
 		const char *hint = "Tap your subject · L/R to fine-tune";
 		drawRoundRect(fb, 320, CARD_X + 8, CARD_Y + 8, textWidth(&fontSmall, hint) + 20, 20, 10, C_BLACK, 150);
@@ -428,6 +479,74 @@ static void reviewBottom(App *a, u16 *fb)
 		drawTextCentered(fb, 320, &fontSmall, 160, 122, C_DIM, 255, "One moment");
 		drawRoundRectGrad(fb, 320, 100, 140, 120, 3, 1, C_ACC0, C_ACC1, 255);
 	}
+}
+
+// ---- settings ----
+
+static const char *const settingLabels[SET_COUNT] = {"Theme", "Transitions", "Speed", "GIF size", "Viewfinder", "Capture flash"};
+
+const char *uiSettingValue(const Settings *st, int row)
+{
+	switch (row)
+	{
+	case SET_THEME: return uiThemeName(st->theme);
+	case SET_SMOOTH: return wiggleSmoothName(st->smooth);
+	case SET_SPEED: return tfmt("%d ms", st->delayMs);
+	case SET_GIF_SIZE: return st->gifHalf ? "Half" : "Full";
+	case SET_FPS: return tfmt("%d fps", st->fps);
+	case SET_FLASH: return st->flash ? "On" : "Off";
+	}
+	return "";
+}
+
+#define SET_VALUE_X0 176 // left arrow
+#define SET_VALUE_X1 300 // right arrow
+
+int uiSettingsRowAt(int x, int y, int *step)
+{
+	if (y < SET_Y || y >= SET_Y + SET_COUNT * SET_ROW)
+		return -1;
+	*step = x >= SET_VALUE_X0 - 10 && x < SET_VALUE_X0 + 22 ? -1 : x >= SET_VALUE_X1 - 22 ? 1 : 0;
+	return (y - SET_Y) / SET_ROW;
+}
+
+static void settingsBottom(App *a, u16 *fb)
+{
+	static const char *const notes[SET_COUNT] = {
+		"", "for new photos", "for new photos", "", "saves battery", "",
+	};
+	background(fb);
+	drawText(fb, 320, &fontTitle, 16, 9, C_TEXT, 255, "Settings");
+
+	for (int i = 0; i < SET_COUNT; i++)
+	{
+		int y = SET_Y + i * SET_ROW, cy = y + SET_ROW_H / 2;
+		bool sel = i == a->settingsSel;
+		drawRoundRect(fb, 320, 12, y, 296, SET_ROW_H, SET_ROW_H / 2, sel ? C_SURFACE2 : C_SURFACE, 255);
+		if (sel)
+			drawRoundRectOutline(fb, 320, 12, y, 296, SET_ROW_H, SET_ROW_H / 2, 1, C_ACC1, 255);
+
+		int lx = 24 + drawText(fb, 320, &fontSmall, 24, cy - lineH(&fontSmall) / 2, C_TEXT, 255, settingLabels[i]);
+		if (notes[i][0])
+			drawText(fb, 320, &fontSmall, lx + 6, cy - lineH(&fontSmall) / 2, C_DIM, 200, notes[i]);
+
+		u16 arrow = sel ? C_TEXT : C_DIM;
+		drawText(fb, 320, &fontSmall, SET_VALUE_X0, cy - lineH(&fontSmall) / 2, arrow, 255, "◀");
+		drawText(fb, 320, &fontSmall, SET_VALUE_X1 - textWidth(&fontSmall, "▶"), cy - lineH(&fontSmall) / 2, arrow, 255, "▶");
+		int vx = (SET_VALUE_X0 + SET_VALUE_X1) / 2;
+		const char *value = uiSettingValue(&a->settings, i);
+		if (i == SET_THEME)
+		{
+			// The theme's two accent colors next to its name.
+			vx += 8;
+			int tx = vx - textWidth(&fontSmall, value) / 2 - 12;
+			drawCircleGrad(fb, 320, tx, cy, 5, C_ACC0, C_ACC1, 255);
+		}
+		drawTextCentered(fb, 320, &fontSmall, vx, cy - lineH(&fontSmall) / 2, C_TEXT, 255, value);
+	}
+
+	static const char *const btns[] = {"▲▼", "◀▶", "B"}, *const labels[] = {"Select", "Change", "Done"};
+	centeredHints(fb, 218, 3, btns, labels);
 }
 
 // ---- share ----
@@ -490,19 +609,21 @@ static void shareBottom(App *a, u16 *fb)
 
 // ---- shared ----
 
+// A pill in the accent gradient (red for errors) that fades in and out.
 static void toast(App *a, u16 *fb)
 {
-	u64 t = a->now - a->toastAt;
+	u64 t = since(a, a->toastAt);
 	if (!a->toast[0] || t >= TOAST_MS)
 		return;
-	int slide = t < 220 ? (int)(220 - t) * 34 / 220 : 0;
-	int alpha = t > TOAST_MS - 400 ? (int)(TOAST_MS - t) * 255 / 400 : 255;
+	int alpha = t < 150 ? (int)t * 255 / 150 : t > TOAST_MS - 400 ? (int)(TOAST_MS - t) * 255 / 400 : 255;
 	const char *text = tfmt("%s %s", a->toastError ? "×" : "✓", a->toast);
-	int w = textWidth(&fontBody, text) + 28, h = 28, x = 160 - w / 2, y = 8 - slide;
-	drawShadow(fb, 320, x, y, w, h, h / 2, alpha * 200 / 255);
-	drawRoundRect(fb, 320, x, y, w, h, h / 2, C_SURFACE, alpha * 245 / 255);
-	drawRoundRectOutline(fb, 320, x, y, w, h, h / 2, 1, a->toastError ? C_RED : C_ACC0, alpha);
-	drawTextCentered(fb, 320, &fontBody, 160, y + (h - lineH(&fontBody)) / 2, C_TEXT, alpha, text);
+	int w = textWidth(&fontBody, text) + 32, h = 30, x = 160 - w / 2, y = 10;
+	drawShadow(fb, 320, x, y, w, h, h / 2, alpha * 160 / 255);
+	if (a->toastError)
+		drawRoundRect(fb, 320, x, y, w, h, h / 2, C_RED, alpha);
+	else
+		drawRoundRectGrad(fb, 320, x, y, w, h, h / 2, C_ACC0, C_ACC1, alpha);
+	drawTextCentered(fb, 320, &fontBody, 160, y + (h - lineH(&fontBody)) / 2, C_WHITE, alpha, text);
 }
 
 void uiDrawBottom(App *a, u16 *fb)
@@ -511,6 +632,8 @@ void uiDrawBottom(App *a, u16 *fb)
 		homeBottom(a, fb);
 	else if (a->mode == MODE_REVIEW)
 		reviewBottom(a, fb);
+	else if (a->mode == MODE_SETTINGS)
+		settingsBottom(a, fb);
 	else
 		shareBottom(a, fb);
 	toast(a, fb);
@@ -527,7 +650,7 @@ bool uiTopAnimating(const App *a)
 
 bool uiBottomAnimating(const App *a)
 {
-	return a->now - a->modeSince < FADE_MS + 20 || (a->toast[0] && a->now - a->toastAt < TOAST_MS + 20);
+	return since(a, a->modeSince) < FADE_MS + 20 || (a->toast[0] && since(a, a->toastAt) < TOAST_MS + 20);
 }
 
 // ---- touch targets ----

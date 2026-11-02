@@ -87,6 +87,36 @@ static void cameraThread(void *arg)
 	}
 }
 
+static void lockFromUi(void)
+{
+	uiWaiting = true;
+	LightLock_Lock(&lock);
+	uiWaiting = false;
+}
+
+static int fpsSetting = 20;
+
+static CAMU_FrameRate frameRate(void)
+{
+	return fpsSetting <= 15 ? FRAME_RATE_15 : fpsSetting >= 30 ? FRAME_RATE_30 : FRAME_RATE_20;
+}
+
+void camSetFps(int fps)
+{
+	lockFromUi();
+	fpsSetting = fps;
+	if (running)
+	{
+		CAMU_StopCapture(PORT_BOTH);
+		CAMU_SetFrameRate(SELECT_OUT1_OUT2, frameRate());
+		CAMU_ClearBuffer(PORT_BOTH);
+		CAMU_StartCapture(PORT_BOTH);
+	}
+	else
+		CAMU_SetFrameRate(SELECT_OUT1_OUT2, frameRate());
+	LightLock_Unlock(&lock);
+}
+
 bool camOpen(void)
 {
 	for (int i = 0; i < 6; i++)
@@ -97,7 +127,7 @@ bool camOpen(void)
 
 	CAMU_SetSize(SELECT_OUT1_OUT2, SIZE_VGA, CONTEXT_A);
 	CAMU_SetOutputFormat(SELECT_OUT1_OUT2, OUTPUT_RGB_565, CONTEXT_A);
-	CAMU_SetFrameRate(SELECT_OUT1_OUT2, FRAME_RATE_20);
+	CAMU_SetFrameRate(SELECT_OUT1_OUT2, frameRate());
 	CAMU_SetNoiseFilter(SELECT_OUT1_OUT2, true);
 	CAMU_SetAutoExposure(SELECT_OUT1_OUT2, true);
 	CAMU_SetAutoWhiteBalance(SELECT_OUT1_OUT2, true);
@@ -117,13 +147,6 @@ bool camOpen(void)
 	quit = false;
 	thread = threadCreate(cameraThread, NULL, 0x4000, prio > 0x18 ? prio - 1 : prio, -2, false);
 	return thread != NULL;
-}
-
-static void lockFromUi(void)
-{
-	uiWaiting = true;
-	LightLock_Lock(&lock);
-	uiWaiting = false;
 }
 
 void camResume(void)

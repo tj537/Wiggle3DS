@@ -64,6 +64,8 @@ int main(int argc, char **argv)
 	fclose(f);
 	const char *dir = argv[2];
 	filterInit();
+	uiSetTheme(0);
+	app.settings = (Settings){0, 0, 120, false, 20, true};
 
 	app.now = 100000;
 	app.camOk = true;
@@ -121,6 +123,17 @@ int main(int argc, char **argv)
 	app.saving = true;
 	render(dir, "review_saving");
 	app.saving = false;
+
+	// Settings, then the home screen in another theme.
+	app.mode = MODE_SETTINGS;
+	app.settingsSel = 0;
+	render(dir, "settings");
+	uiSetTheme(2);
+	app.settings.theme = 2;
+	app.mode = MODE_HOME;
+	render(dir, "home_ocean");
+	uiSetTheme(0);
+	app.settings.theme = 0;
 
 	// Share screen with a QR code for an example address.
 	app.mode = MODE_SHARE;

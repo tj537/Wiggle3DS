@@ -4,8 +4,10 @@
 #define CAM_W 640
 #define CAM_H 480
 
-// Both outer cameras, streamed as RGB565 at 640x480 (VGA), 20 fps.
+// Both outer cameras, streamed as RGB565 at 640x480 (VGA).
 bool camOpen(void);
+// Viewfinder frame rate: 15, 20 or 30.
+void camSetFps(int fps);
 void camResume(void);
 void camPause(void);
 void camClose(void);

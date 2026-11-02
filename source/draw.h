@@ -29,6 +29,8 @@ void drawImage(u16 *fb, int sw, int dx, int dy, int dw, int dh,
 // drawImage blended over what is already there (alpha 0..255, no rounding).
 void drawImageAlpha(u16 *fb, int sw, int dx, int dy, int dw, int dh,
                     const u16 *img, int stride, int sx, int sy, int w, int h, const u16 *lut, int alpha);
+// Halves a w*h row-major image into (w/2)*(h/2) by averaging 2x2 blocks.
+void halveRows(u16 *dst, const u16 *src, int w, int h);
 // dst = a mixed with b by t (0..255), for row-major images.
 void blendRows(u16 *dst, const u16 *a, const u16 *b, int pixels, int t);
 

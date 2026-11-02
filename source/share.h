@@ -11,3 +11,5 @@ bool shareStart(char *url, int size);
 // Answers at most one waiting request; returns true when a GIF was sent.
 bool sharePoll(void);
 void shareStop(void);
+// Page colors as 0xRRGGBB: background, card, muted text, accent gradient.
+void shareSetColors(u32 bg, u32 card, u32 dim, u32 acc0, u32 acc1);

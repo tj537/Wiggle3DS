@@ -11,7 +11,22 @@ typedef enum
 	MODE_HOME,   // top: live view or the selected shot, bottom: gallery
 	MODE_REVIEW, // edit pivot and speed, save
 	MODE_SHARE,  // web server for the phone, QR code on top
+	MODE_SETTINGS,
 } Mode;
+
+#define THEME_COUNT 6
+
+// Saved to sdmc:/Wiggle3DS/settings.txt.
+typedef struct
+{
+	int theme;
+	int smooth, delayMs; // defaults for new photos
+	bool gifHalf;        // export at half size, for messengers
+	int fps;             // viewfinder: 15, 20 or 30
+	bool flash;          // white flash on capture
+} Settings;
+
+typedef enum { SET_THEME, SET_SMOOTH, SET_SPEED, SET_GIF_SIZE, SET_FPS, SET_FLASH, SET_COUNT } SettingRow;
 
 #define MAX_SHOTS 1000
 #define DELAY_MIN 40
@@ -33,6 +48,12 @@ typedef enum
 #define CELL_GAP 6
 
 #define FILTER_BTN_X 12
+#define GEAR_R 11
+
+// Settings rows
+#define SET_Y 40
+#define SET_ROW 28
+#define SET_ROW_H 24
 
 // Filter menu: a grid of buttons
 #define MENU_COLS 3
@@ -92,11 +113,19 @@ typedef struct
 	u8 qr[(57 * 57 + 7) / 8 + 1];
 	int sharedCount;
 
+	Settings settings;
+	int settingsSel;
+
 	// Toast message at the top of the bottom screen.
 	char toast[64];
 	bool toastError;
 	u64 toastAt;
 } App;
+
+void uiSetTheme(int theme);
+const char *uiThemeName(int theme);
+u32 uiThemeRgb(int theme, int which); // 0xRRGGBB; which: 0 bg, 2 surface, 6 dim, 7/8 accents
+const char *uiSettingValue(const Settings *s, int row);
 
 void uiDrawTop(App *a, u16 *left, u16 *right, bool stereo);
 void uiDrawBottom(App *a, u16 *fb);
@@ -115,3 +144,6 @@ bool uiFilterButtonHit(const App *a, int x, int y);
 bool uiFilterPillHit(int x, int y); // review: the filter pill on the photo
 bool uiSmoothPillHit(int x, int y); // review: the smoothing pill on the photo
 int uiMenuTileAt(int x, int y);
+bool uiGearHit(int x, int y);
+// Settings: the row at a point, and whether the point is on its ◀ (-1) or ▶ (+1).
+int uiSettingsRowAt(int x, int y, int *step);

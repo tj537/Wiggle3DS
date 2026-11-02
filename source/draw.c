@@ -218,6 +218,16 @@ void drawImageAlpha(u16 *fb, int sw, int dx, int dy, int dw, int dh,
 		image(fb, sw, dx, dy, dw, dh, img, stride, sx, sy, w, h, lut, 0, alpha);
 }
 
+void halveRows(u16 *dst, const u16 *src, int w, int h)
+{
+	for (int y = 0; y < h / 2; y++)
+		for (int x = 0; x < w / 2; x++)
+		{
+			const u16 *p = src + y * 2 * w + x * 2;
+			dst[y * (w / 2) + x] = avg4(p[0], p[1], p[w], p[w + 1]);
+		}
+}
+
 void blendRows(u16 *dst, const u16 *a, const u16 *b, int pixels, int t)
 {
 	for (int i = 0; i < pixels; i++)
