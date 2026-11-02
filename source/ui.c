@@ -161,14 +161,17 @@ static void homeTop(App *a, u16 *fb, int eye, bool stereo)
 	drawClear(fb, 400, C_BLACK);
 	if (!a->browsing)
 	{
+		int filter = a->filterMenu ? a->menuSel : a->filter;
 		if (a->camOk && a->liveL)
-			drawFiltered(fb, 400, 40, 0, 320, 240, eye ? a->liveR : a->liveL, CAM_W, 0, 0, CAM_W, CAM_H, a->filter, 0);
+			drawFiltered(fb, 400, 40, 0, 320, 240, eye ? a->liveR : a->liveL, CAM_W, 0, 0, CAM_W, CAM_H, filter, 0);
 		else
 			drawTextCentered(fb, 400, &fontBody, 200, 112, C_DIM, 255, "Camera unavailable");
 		if (stereo)
 			overlayPillLeft(fb, 400, 48, 8, "3D");
-		if (a->filter)
-			overlayPill(fb, 400, 200, 212, filterName(a->filter));
+		if (a->filterMenu)
+			overlayPill(fb, 400, 200, 212, tfmt("Preview · %s", filterName(filter)));
+		else if (filter)
+			overlayPill(fb, 400, 200, 212, filterName(filter));
 		return;
 	}
 
@@ -241,7 +244,7 @@ static int filterButtonWidth(const App *a)
 
 bool uiFilterButtonHit(const App *a, int x, int y)
 {
-	int fw = filterButtonWidth(a), fx = 308 - shareButtonWidth() - 6 - fw;
+	int fw = filterButtonWidth(a), fx = FILTER_BTN_X;
 	return x >= fx - 3 && x < fx + fw + 3 && y >= HEADER_BTN_Y - 4 && y < HEADER_BTN_Y + HEADER_BTN_H + 4;
 }
 
@@ -249,8 +252,8 @@ int uiMenuTileAt(int x, int y)
 {
 	for (int i = 0; i < FILTER_COUNT; i++)
 	{
-		int tx = GRID_X + (i % GRID_COLS) * (CELL_W + CELL_GAP), ty = MENU_Y + (i / GRID_COLS) * MENU_ROW;
-		if (x >= tx - CELL_GAP / 2 && x < tx + CELL_W + CELL_GAP / 2 && y >= ty - 4 && y < ty + MENU_ROW - 4)
+		int bx = MENU_X + (i % MENU_COLS) * (MENU_BTN_W + MENU_GAP), by = MENU_Y + (i / MENU_COLS) * MENU_ROW;
+		if (x >= bx - MENU_GAP / 2 && x < bx + MENU_BTN_W + MENU_GAP / 2 && y >= by - MENU_GAP / 2 && y < by + MENU_BTN_H + MENU_GAP / 2)
 			return i;
 	}
 	return -1;
@@ -275,49 +278,54 @@ static void homeEmpty(u16 *fb)
 	drawTextCentered(fb, 320, &fontSmall, 160, 156, C_DIM, 255, "Take a photo and save it to see it here.");
 }
 
-// Filter picker over the whole bottom screen: every filter on the current
-// camera frame (or the selected shot while browsing).
+// Filter picker over the whole bottom screen: plain buttons; the live view
+// on top previews the selected one.
 static void filterMenu(App *a, u16 *fb)
 {
-	background(fb);
-	drawText(fb, 320, &fontTitle, 16, 9, C_TEXT, 255, "Filters");
-	int hw = hintWidth("B", "Close");
-	drawHint(fb, 320, 304 - hw, 16, "B", "Close", C_DIM, 255);
+	// Each button shows what its filter does to skin, sky and leaves.
+	static const u16 samples[3] = {COL565(226, 168, 138), COL565(92, 150, 222), COL565(84, 160, 92)};
 
-	const u16 *img = a->liveL;
-	int stride = CAM_W, sx = 0, sy = 0, w = CAM_W, h = CAM_H;
-	if (a->browsing && a->gridOk[a->sel % GRID_PAGE])
-	{
-		img = a->grid[a->sel % GRID_PAGE];
-		stride = w = THUMB_W;
-		h = THUMB_H;
-	}
+	background(fb);
+	drawText(fb, 320, &fontTitle, 16, 9, C_TEXT, 255, "Filter");
+	const char *note = "Preview on the top screen";
+	drawText(fb, 320, &fontSmall, 304 - textWidth(&fontSmall, note), 17, C_DIM, 255, note);
+
 	for (int i = 0; i < FILTER_COUNT; i++)
 	{
-		int x = GRID_X + (i % GRID_COLS) * (CELL_W + CELL_GAP), y = MENU_Y + (i / GRID_COLS) * MENU_ROW;
-		if (i == a->menuSel)
-			drawRoundRectGrad(fb, 320, x - 3, y - 3, CELL_W + 6, CELL_H + 6, 9, C_ACC0, C_ACC1, 255);
-		if (img)
-			drawFiltered(fb, 320, x, y, CELL_W, CELL_H, img, stride, sx, sy, w, h, i, 6);
+		int x = MENU_X + (i % MENU_COLS) * (MENU_BTN_W + MENU_GAP), y = MENU_Y + (i / MENU_COLS) * MENU_ROW;
+		bool sel = i == a->menuSel, current = i == a->filter;
+		if (sel)
+			drawRoundRectGrad(fb, 320, x, y, MENU_BTN_W, MENU_BTN_H, 12, C_ACC0, C_ACC1, 255);
 		else
-			drawRoundRect(fb, 320, x, y, CELL_W, CELL_H, 6, C_SURFACE2, 255);
-		bool current = i == a->filter;
-		drawTextCentered(fb, 320, &fontSmall, x + CELL_W / 2, y + CELL_H + 3, current ? C_TEXT : C_DIM, 255,
-		                 current ? tfmt("✓ %s", filterName(i)) : filterName(i));
+			drawRoundRect(fb, 320, x, y, MENU_BTN_W, MENU_BTN_H, 12, C_SURFACE2, 255);
+		if (current && !sel)
+			drawRoundRectOutline(fb, 320, x, y, MENU_BTN_W, MENU_BTN_H, 12, 1, C_ACC1, 255);
+
+		const u16 *lut = filterLut(i);
+		for (int k = 0; k < 3; k++)
+		{
+			float cx = x + 13 + k * 7, cy = y + MENU_BTN_H / 2.0f;
+			drawCircle(fb, 320, cx, cy, 4.5f, C_BLACK, 90);
+			drawCircle(fb, 320, cx, cy, 3.5f, lut ? lut[samples[k]] : samples[k], 255);
+		}
+		drawText(fb, 320, &fontSmall, x + 36, y + (MENU_BTN_H - lineH(&fontSmall)) / 2, sel || current ? C_TEXT : C_DIM, 255,
+		         current ? tfmt("%s ✓", filterName(i)) : filterName(i));
 	}
+
+	static const char *const btns[] = {"A", "B"}, *const labels[] = {"Apply", "Cancel"};
+	centeredHints(fb, 218, 2, btns, labels);
 }
 
 static void homeBottom(App *a, u16 *fb)
 {
 	background(fb);
-	drawTextGrad(fb, 320, &fontTitle, 16, 9, C_ACC0, C_ACC1, "Wiggle3DS");
 
 	int sw = shareButtonWidth(), ty = HEADER_BTN_Y + (HEADER_BTN_H - lineH(&fontSmall)) / 2;
 	drawRoundRect(fb, 320, 308 - sw, HEADER_BTN_Y, sw, HEADER_BTN_H, HEADER_BTN_H / 2, C_SURFACE2, 255);
 	drawHint(fb, 320, 308 - sw + 8, ty, "SELECT", "Share", C_TEXT, 255);
 
 	// Filter button: a gradient dot, the current filter and a caret.
-	int fw = filterButtonWidth(a), fx = 308 - sw - 6 - fw;
+	int fw = filterButtonWidth(a), fx = FILTER_BTN_X;
 	drawRoundRect(fb, 320, fx, HEADER_BTN_Y, fw, HEADER_BTN_H, HEADER_BTN_H / 2, a->filterMenu ? C_STROKE : C_SURFACE2, 255);
 	drawCircleGrad(fb, 320, fx + 13, HEADER_BTN_Y + HEADER_BTN_H / 2.0f, 4.5f, C_ACC0, C_ACC1, 255);
 	int nx = fx + 23 + drawText(fb, 320, &fontSmall, fx + 23, ty, C_TEXT, 255, filterName(a->filter));

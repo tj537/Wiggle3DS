@@ -328,23 +328,38 @@ static void deleteSelected(void)
 
 static void openFilterMenu(void)
 {
+	// The menu sets the camera filter, so show the camera to preview it on.
+	if (app.browsing)
+		stopBrowsing();
 	app.filterMenu = true;
 	app.menuSel = app.filter;
 }
 
 static void updateFilterMenu(u32 down)
 {
-	if (down & KEY_RIGHT && app.menuSel < FILTER_COUNT - 1) app.menuSel++;
-	if (down & KEY_LEFT && app.menuSel > 0) app.menuSel--;
-	if (down & KEY_DOWN && app.menuSel + GRID_COLS < FILTER_COUNT) app.menuSel += GRID_COLS;
-	if (down & KEY_UP && app.menuSel - GRID_COLS >= 0) app.menuSel -= GRID_COLS;
+	int sel = app.menuSel;
+	if (down & KEY_RIGHT && sel < FILTER_COUNT - 1) sel++;
+	if (down & KEY_LEFT && sel > 0) sel--;
+	if (down & KEY_DOWN && sel + MENU_COLS < FILTER_COUNT) sel += MENU_COLS;
+	if (down & KEY_UP && sel - MENU_COLS >= 0) sel -= MENU_COLS;
 
-	int tile = released && uiMenuTileAt(startX, startY) == uiMenuTileAt(touchX, touchY) ? uiMenuTileAt(touchX, touchY) : -1;
-	if (tile >= 0 || (down & KEY_A))
+	// Touching a button previews it; tapping the previewed one again applies it.
+	bool apply = down & KEY_A;
+	if (down & KEY_TOUCH)
 	{
-		app.filter = tile >= 0 ? tile : app.menuSel;
+		int tile = uiMenuTileAt(touchX, touchY);
+		if (tile >= 0)
+		{
+			apply = tile == app.menuSel;
+			sel = tile;
+		}
+	}
+	app.menuSel = sel;
+
+	if (apply)
+	{
+		app.filter = app.menuSel;
 		app.filterMenu = false;
-		topDirty = true;
 	}
 	else if (down & (KEY_B | KEY_Y))
 		app.filterMenu = false;

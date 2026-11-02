@@ -32,9 +32,16 @@ typedef enum
 #define CELL_H 52
 #define CELL_GAP 6
 
-// Filter menu: tiles on the gallery grid's columns, with names below
-#define MENU_Y 36
-#define MENU_ROW (CELL_H + 16)
+#define FILTER_BTN_X 12
+
+// Filter menu: a grid of buttons
+#define MENU_COLS 3
+#define MENU_X 12
+#define MENU_Y 44
+#define MENU_BTN_W 92
+#define MENU_BTN_H 34
+#define MENU_GAP 8
+#define MENU_ROW (MENU_BTN_H + MENU_GAP)
 
 // Review
 #define CARD_X 48
@@ -60,7 +67,7 @@ typedef struct
 	bool browsing, playing;
 	int filter; // camera filter, also used for new shots
 	bool filterMenu;
-	int menuSel;
+	int menuSel; // previewed in the live view while the menu is open
 	bool camOk;
 	const u16 *liveL, *liveR;
 
