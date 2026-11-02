@@ -11,7 +11,8 @@ typedef enum
 {
 	G_NONE, G_CHROMA, G_VHS, G_MOSH, G_SORT, G_TEAR, G_MOSAIC, G_CRT, G_BITROT, G_ECHO, G_NIGHT, G_MELT,
 	G_INTERLACE, G_CIRCUIT, G_PRISM, G_GHOST, G_TRAILS, G_BLEED, G_WOBBLE, G_SIGNAL, G_HOLO, G_BROADCAST,
-	G_WORN, G_ANAGLYPH, G_SMEAR, G_SWIRL, G_COMPRESS, G_DRIFT, G_KEYFRAME,
+	G_WORN, G_ANAGLYPH, G_SMEAR, G_SWIRL, G_COMPRESS, G_DRIFT, G_KEYFRAME, G_CROSSTALK, G_STUCK, G_SYNC,
+	G_CLOCK, G_XOR, G_HALFTONE, G_RISO, G_ONEBIT, G_EDGES, G_FEEDBACK,
 } Glitch;
 
 // Moving glitches get a new pattern every frame of the loop (see
@@ -79,6 +80,27 @@ static const FilterDef defs[FILTER_COUNT] = {
 	{"Compress", 0, G_COMPRESS},
 	{"Drift", 0, G_DRIFT, MOVES},
 	{"Keyframe", 0, G_KEYFRAME, MOVES},
+	// circuit bending
+	{"Gray Code", 0, 0},
+	{"Overflow", 0, 0},
+	{"Reverse", 0, 0},
+	{"Crosstalk", 0, G_CROSSTALK},
+	{"Stuck Bits", 0, G_STUCK},
+	{"Sync Loss", 0, G_SYNC, MOVES},
+	{"Clock", 0, G_CLOCK, MOVES},
+	{"XOR", 0, G_XOR},
+	// more colors
+	{"Cyanotype", 50, 0},
+	{"Matte", 30, 0},
+	{"Golden", 60, 0},
+	{"Pop", 0, 0},
+	// print and pixel
+	{"CGA", 0, 0},
+	{"Halftone", 0, G_HALFTONE},
+	{"Riso", 0, G_RISO},
+	{"1-Bit", 0, G_ONEBIT},
+	{"Edges", 0, G_EDGES},
+	{"Feedback", 0, G_FEEDBACK},
 };
 
 // The filter menu's groups, in order; every filter is in one.
@@ -86,14 +108,16 @@ static const struct
 {
 	const char *name;
 	int count;
-	u8 items[12];
+	u8 items[16];
 } groups[] = {
 	{"Classic", 11, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}},
-	{"Color", 11, {11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21}},
-	{"RGB & Ghost", 6, {22, 35, 36, 37, 30, 44}},
+	{"Color", 13, {11, 12, 13, 14, 15, 16, 17, 18, 19, 58, 59, 60, 61}},
+	{"RGB & Ghost", 7, {22, 35, 36, 37, 30, 44, 67}},
 	{"Tape & Screen", 8, {23, 43, 38, 39, 28, 33, 41, 31}},
 	{"Data Mosh", 8, {24, 45, 46, 49, 47, 48, 40, 42}},
-	{"Bits & Pixels", 6, {25, 29, 34, 26, 32, 27}},
+	{"Circuit Bending", 11, {21, 34, 50, 51, 52, 53, 54, 55, 56, 57, 29}},
+	{"Print & Pixel", 7, {63, 64, 65, 62, 20, 27, 66}},
+	{"Warp", 3, {25, 26, 32}},
 };
 #define GROUP_COUNT (int)(sizeof(groups) / sizeof(groups[0]))
 
@@ -114,6 +138,14 @@ int filterNext(int filter, int step)
 			order[n++] = groups[g].items[i];
 		}
 	return order[(at + step % n + n) % n];
+}
+
+// Filters made from the bits of the colors (circuit bending).
+static bool bitFilter(int f) { return f == 21 || f == 34 || f == 50 || f == 51 || f == 52; }
+
+bool filterHasSwatches(int filter)
+{
+	return filter >= 0 && filter < FILTER_COUNT && !defs[filter].glitch && !bitFilter(filter);
 }
 
 bool filterMoves(int filter) { return filter > 0 && filter < FILTER_COUNT && defs[filter].moves; }
@@ -352,6 +384,54 @@ static void apply(int filter, float *r, float *g, float *b)
 	case 44: // Anaglyph: nearly gray, so the red and cyan show
 		saturate(r, g, b, 0.25f);
 		break;
+	case 58: // Cyanotype: Prussian blue to pale paper
+		y = contrast(luma(*r, *g, *b), 1.1f);
+		*r = 0.04f + y * 0.8f;
+		*g = 0.14f + y * 0.76f;
+		*b = 0.36f + y * 0.62f;
+		break;
+	case 59: // Matte: soft blacks, quiet highlights
+		saturate(r, g, b, 0.85f);
+		*r = clampf(0.12f + *r * 0.8f);
+		*g = clampf(0.11f + *g * 0.79f);
+		*b = clampf(0.1f + *b * 0.76f);
+		break;
+	case 60: // Golden: warm film light
+		*r = contrast(clampf(*r * 1.08f + 0.04f), 1.05f);
+		*g = contrast(clampf(*g * 1.02f + 0.02f), 1.05f);
+		*b = contrast(clampf(*b * 0.8f), 1.05f);
+		saturate(r, g, b, 1.12f);
+		break;
+	case 61: // Pop: loud colors in three steps each
+		saturate(r, g, b, 1.6f);
+		*r = (int)(*r * 2.99f) / 2.0f;
+		*g = (int)(*g * 2.99f) / 2.0f;
+		*b = (int)(*b * 2.99f) / 2.0f;
+		break;
+	case 62: // CGA: black, cyan, magenta, white
+	{
+		static const float pal[4][3] = {{0, 0, 0}, {0.33f, 1, 1}, {1, 0.33f, 1}, {1, 1, 1}};
+		int best = 0;
+		float bd = 9;
+		for (int i = 0; i < 4; i++)
+		{
+			float dr = *r - pal[i][0], dg = *g - pal[i][1], db = *b - pal[i][2], d = dr * dr + dg * dg + db * db;
+			if (d < bd)
+			{
+				bd = d;
+				best = i;
+			}
+		}
+		*r = pal[best][0];
+		*g = pal[best][1];
+		*b = pal[best][2];
+		break;
+	}
+	case 63: // Halftone, 1-Bit and Edges work on gray
+	case 65:
+	case 66:
+		*r = *g = *b = contrast(luma(*r, *g, *b), 1.15f);
+		break;
 	case 31: // Night Vision: green phosphor
 		y = contrast(luma(*r, *g, *b), 1.3f);
 		*r = y * 0.16f;
@@ -363,11 +443,25 @@ static void apply(int filter, float *r, float *g, float *b)
 
 // Circuit bending: colors made by mixing the bits of the channels, like a
 // shorted color bus.
+static int reverseBits(int v, int bits)
+{
+	int out = 0;
+	for (int i = 0; i < bits; i++)
+		out |= (v >> i & 1) << (bits - 1 - i);
+	return out;
+}
+
 static u16 bendBits(int filter, u16 c)
 {
 	int r = c >> 11, g = c >> 5 & 63, b = c & 31;
 	if (filter == 21) // Bent: each channel xor-ed with its neighbor
 		return (r ^ g >> 1) << 11 | (g ^ (b << 1)) << 5 | (b ^ r);
+	if (filter == 50) // Gray Code: contour bands where bits flip
+		return (r ^ r >> 1) << 11 | (g ^ g >> 1) << 5 | (b ^ b >> 1);
+	if (filter == 51) // Overflow: twice as bright, wrapping around like a counter
+		return (r * 2 & 31) << 11 | (g * 2 & 63) << 5 | (b * 2 & 31);
+	if (filter == 52) // Reverse: the bits of each channel back to front
+		return reverseBits(r, 5) << 11 | reverseBits(g, 6) << 5 | reverseBits(b, 5);
 	// Circuit: channels swapped, green rotated by two bits
 	int g2 = (g << 2 | g >> 4) & 63;
 	return b << 11 | g2 << 5 | ((r ^ g >> 1) & 31);
@@ -377,7 +471,7 @@ static void build(int f)
 {
 	for (int c = 0; c < 65536; c++)
 	{
-		if (f == 21 || f == 34)
+		if (bitFilter(f))
 		{
 			luts[f][c] = bendBits(f, c);
 			continue;
@@ -906,6 +1000,203 @@ static void keyframe(u16 *img, int w, int h, u32 *s)
 	free(src);
 }
 
+// Crosstalk: the low bits of every pixel come from a neighbor, as if two
+// lines of the data bus touched.
+static void crosstalk(u16 *img, int w, int h)
+{
+	u16 tmp[MAXDIM];
+	int d = maxi(2, w / 30);
+	for (int y = 0; y < h; y++)
+	{
+		u16 *row = img + y * w;
+		memcpy(tmp, row, w * sizeof(u16));
+		for (int x = 0; x < w; x++)
+			row[x] = (tmp[x] & 0xC718) | (tmp[clampi(x + d, 0, w - 1)] & ~0xC718);
+	}
+}
+
+// Stuck bits: columns and rows where some bits are always on or off.
+static void stuckBits(u16 *img, int w, int h, u32 *s)
+{
+	static const u16 bits[6] = {0x8000, 0x0400, 0x0010, 0x8410, 0x4208, 0x2104};
+	for (int i = 0; i < 14; i++)
+	{
+		u16 mask = bits[rnd(s, 6)];
+		bool on = rnd(s, 3), col = i < 10;
+		int at = rnd(s, col ? w : h), size = 1 + rnd(s, maxi(1, (col ? w : h) / 70));
+		for (int k = at; k < at + size && k < (col ? w : h); k++)
+			for (int j = 0; j < (col ? h : w); j++)
+			{
+				u16 *p = col ? img + j * w + k : img + k * w + j;
+				*p = on ? *p | mask : *p & ~mask;
+			}
+	}
+}
+
+// Sync loss: in some bands every line starts a little later, so the picture
+// shears off sideways and wraps around.
+static void syncLoss(u16 *img, int w, int h, u32 *s)
+{
+	int y0[3], y1[3], slope[3];
+	for (int i = 0; i < 3; i++)
+	{
+		y0[i] = rnd(s, h);
+		y1[i] = y0[i] + h / 10 + rnd(s, h / 4);
+		slope[i] = (rnd(s, 2) ? 1 : -1) * (1 + rnd(s, maxi(1, w / 120)));
+	}
+	for (int y = 0; y < h; y++)
+		for (int i = 0; i < 3; i++)
+			if (y >= y0[i] && y < y1[i])
+			{
+				shiftRowWrap(img + y * w, w, (y - y0[i]) * slope[i]);
+				break;
+			}
+}
+
+// Clock glitch: a slow sample-and-hold, each value held for a few pixels,
+// how long changing from band to band.
+static void clockGlitch(u16 *img, int w, int h, u32 *s)
+{
+	int band = maxi(1, h / 48), hold = 1;
+	for (int y = 0; y < h; y++)
+	{
+		if (y % band == 0)
+			hold = rnd(s, 3) ? 1 + rnd(s, maxi(1, w / 40)) : 1;
+		if (hold < 2)
+			continue;
+		u16 *row = img + y * w;
+		for (int x = 0; x < w; x++)
+			row[x] = row[x - x % hold];
+	}
+}
+
+// XOR: the picture xor-ed with a pattern of x xor y, like munching squares.
+static void xorPattern(u16 *img, int w, int h)
+{
+	for (int y = 0; y < h; y++)
+		for (int x = 0; x < w; x++)
+		{
+			int c = ((x * 64 / w) ^ (y * 48 / h)) & 15;
+			u16 p = img[y * w + x];
+			img[y * w + x] = RGB(R5(p) ^ (c << 1 & 31), G6(p) ^ (c << 2 & 63), B5(p) ^ c);
+		}
+}
+
+static const u8 bayer8[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
+
+// Halftone: black dots on paper, bigger where it is darker.
+static void halftone(u16 *img, int w, int h)
+{
+	int cs = maxi(3, w / 70);
+	const u16 paper = RGB(30, 59, 27), ink = RGB(3, 6, 5);
+	for (int by = 0; by < h; by += cs)
+		for (int bx = 0; bx < w; bx += cs)
+		{
+			int sum = 0, n = 0;
+			for (int y = by; y < by + cs && y < h; y++)
+				for (int x = bx; x < bx + cs && x < w; x++, n++)
+					sum += G6(img[y * w + x]);
+			// The dot covers as much of its cell as the cell is dark.
+			float dark = 1 - sum / (63.0f * n), r = sqrtf(dark / 3.14159f) * cs * 1.05f, c = (cs - 1) / 2.0f;
+			for (int y = by; y < by + cs && y < h; y++)
+				for (int x = bx; x < bx + cs && x < w; x++)
+				{
+					float dx = x - bx - c, dy = y - by - c;
+					img[y * w + x] = dx * dx + dy * dy <= r * r ? ink : paper;
+				}
+		}
+}
+
+// Riso: two inks, pink and blue, a bit out of register, with the grain of
+// the print.
+static void riso(u16 *img, int w, int h)
+{
+	u16 *src = malloc(w * h * sizeof(u16));
+	if (!src)
+		return;
+	memcpy(src, img, w * h * sizeof(u16));
+	int d = maxi(1, w / 120), cell = maxi(1, w / 320);
+	for (int y = 0; y < h; y++)
+		for (int x = 0; x < w; x++)
+		{
+			int t = bayer8[(y / cell & 3) * 4 + (x / cell & 3)] * 4 + 2; // 0..63
+			u16 a = src[y * w + clampi(x - d, 0, w - 1)], b = src[clampi(y + d, 0, h - 1) * w + x];
+			bool pink = 63 - G6(a) > t, blue = (31 - R5(b)) * 2 * 7 / 10 > t + 8;
+			// Paper, times the inks that print here.
+			int r = 31, g = 61, bl = 29;
+			if (pink)
+			{
+				r = r * 31 / 31;
+				g = g * 18 / 63;
+				bl = bl * 18 / 31;
+			}
+			if (blue)
+			{
+				r = r * 6 / 31;
+				g = g * 36 / 63;
+				bl = bl * 27 / 31;
+			}
+			img[y * w + x] = RGB(r, g, bl);
+		}
+	free(src);
+}
+
+// 1-Bit: black and white with an ordered dither, like an old Mac.
+static void oneBit(u16 *img, int w, int h)
+{
+	int cell = maxi(1, w / 320);
+	for (int y = 0; y < h; y++)
+		for (int x = 0; x < w; x++)
+		{
+			int t = bayer8[(y / cell & 3) * 4 + (x / cell & 3)] * 4 + 2;
+			img[y * w + x] = G6(img[y * w + x]) > t ? RGB(30, 60, 28) : RGB(2, 4, 3);
+		}
+}
+
+// Edges: outlines glowing from cyan to magenta, on black.
+static void edges(u16 *img, int w, int h)
+{
+	u16 *src = malloc(w * h * sizeof(u16));
+	if (!src)
+		return;
+	memcpy(src, img, w * h * sizeof(u16));
+	for (int y = 0; y < h; y++)
+		for (int x = 0; x < w; x++)
+		{
+			int xl = clampi(x - 1, 0, w - 1), xr = clampi(x + 1, 0, w - 1), yu = clampi(y - 1, 0, h - 1), yd = clampi(y + 1, 0, h - 1);
+			int gx = G6(src[y * w + xr]) - G6(src[y * w + xl]), gy = G6(src[yd * w + x]) - G6(src[yu * w + x]);
+			int m = clampi((abs(gx) + abs(gy)) * 3, 0, 63);
+			// Neon: cyan to magenta across the picture.
+			int k = x * 32 / w;
+			img[y * w + x] = RGB(m * (8 + k) / 40 >> 1, m * (40 - k) / 40, m * 31 / 63);
+		}
+	free(src);
+}
+
+// Feedback: the picture fed back into itself, smaller each time, like a
+// camera filming its own monitor.
+static void feedback(u16 *img, int w, int h)
+{
+	u16 *src = malloc(w * h * sizeof(u16));
+	if (!src)
+		return;
+	for (int pass = 0; pass < 3; pass++)
+	{
+		memcpy(src, img, w * h * sizeof(u16));
+		float k = 1.14f; // sample further out: the copy comes out smaller
+		for (int y = 0; y < h; y++)
+			for (int x = 0; x < w; x++)
+			{
+				int sx = (int)((x - w / 2) * k + w / 2), sy = (int)((y - h / 2) * k + h / 2);
+				if (sx < 0 || sy < 0 || sx >= w || sy >= h)
+					continue;
+				u16 a = src[y * w + x], b = src[sy * w + sx];
+				img[y * w + x] = RGB(R5(a) > R5(b) ? R5(a) : R5(b), (G6(a) + G6(b)) >> 1, B5(a) > B5(b) ? B5(a) : B5(b));
+			}
+	}
+	free(src);
+}
+
 void filterGlitch(u16 *img, int w, int h, int filter, int frame)
 {
 	if (!filterHasGlitch(filter) || w > MAXDIM || h > MAXDIM)
@@ -1089,6 +1380,36 @@ void filterGlitch(u16 *img, int w, int h, int filter, int frame)
 		break;
 	case G_KEYFRAME:
 		keyframe(img, w, h, s);
+		break;
+	case G_CROSSTALK:
+		crosstalk(img, w, h);
+		break;
+	case G_STUCK:
+		stuckBits(img, w, h, s);
+		break;
+	case G_SYNC:
+		syncLoss(img, w, h, s);
+		break;
+	case G_CLOCK:
+		clockGlitch(img, w, h, s);
+		break;
+	case G_XOR:
+		xorPattern(img, w, h);
+		break;
+	case G_HALFTONE:
+		halftone(img, w, h);
+		break;
+	case G_RISO:
+		riso(img, w, h);
+		break;
+	case G_ONEBIT:
+		oneBit(img, w, h);
+		break;
+	case G_EDGES:
+		edges(img, w, h);
+		break;
+	case G_FEEDBACK:
+		feedback(img, w, h);
 		break;
 	case G_ANAGLYPH: // red to the left, cyan to the right, like 3D glasses
 	{

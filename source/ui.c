@@ -35,6 +35,7 @@ static bool bgReady;
 #define C_ACC0 palette[7]
 #define C_ACC1 palette[8]
 #define C_RED COL565(255, 76, 92)
+#define C_STAR COL565(255, 200, 70)
 #define C_BLACK 0
 #define C_WHITE 0xFFFF
 
@@ -261,11 +262,12 @@ bool uiTopWiggles(const App *a, int *delayMs)
 	if (a->mode == MODE_REVIEW)
 	{
 		*delayMs = a->delayMs;
-		return !uiShotIsPhoto(a) || filterMoves(a->shotFilter);
+		return !uiShotIsPhoto(a); // a photo stands still, moving filter or not
 	}
-	if (a->mode == MODE_GALLERY && a->playing && a->shotCount)
+	const ShotInfo *info = selectedInfo(a);
+	if (a->mode == MODE_GALLERY && a->playing && a->shotCount && !(info && SHOT_IS_PHOTO(info)))
 	{
-		*delayMs = shotDelay(selectedInfo(a));
+		*delayMs = shotDelay(info);
 		return true;
 	}
 	return false;
@@ -277,9 +279,11 @@ static void homeTop(App *a, u16 *fb, int eye, bool stereo)
 {
 	drawClear(fb, 400, C_BLACK);
 	int filter = a->filterMenu ? a->menuSel : a->settings.filter;
+	// Plain photos keep a moving filter still, as in the JPG.
+	bool photoMode = a->selfie || a->settings.smooth == SMOOTH_OFF;
 	if (a->camOk && a->liveL)
 		drawFiltered(fb, 400, 40, 0, 320, 240, eye ? a->liveR : a->liveL, CAM_W, 0, 0, CAM_W, CAM_H, filter, 0,
-		             (int)(a->now / LIVE_GLITCH_MS), a->settings.strength);
+		             photoMode ? 0 : (int)(a->now / LIVE_GLITCH_MS), a->settings.strength);
 	else if (!a->camStarting)
 		drawTextCentered(fb, 400, &fontBody, 200, 112, C_DIM, 255, "Camera unavailable");
 	if (a->haveFirst) // the first exposure over the live view, to line up the second
@@ -334,7 +338,7 @@ static void galleryTop(App *a, u16 *fb, int eye, bool stereo)
 	int mix = stereo ? (eye ? 255 : 0) : photo ? (a->settings.photoEye ? 255 : 0) : a->playing ? frameMix(a, smooth, delay) : 0;
 	if (a->previewNum == a->shots[a->sel])
 		drawWiggle(fb, 400, 40, 0, PREVIEW_W, PREVIEW_H, a->previewL, a->previewR, PREVIEW_W, 0, 0, 0, 0, PREVIEW_W, PREVIEW_H, filter, mix,
-		           a->playing ? loopStep(a, filter, smooth, delay) : 0, info ? SHOT_STRENGTH(info) : 100);
+		           a->playing && !photo ? loopStep(a, filter, smooth, delay) : 0, info ? SHOT_STRENGTH(info) : 100);
 	else if (info)
 		drawImage(fb, 400, 40, 0, PREVIEW_W, PREVIEW_H, a->grid[cur], THUMB_W, 0, 0, THUMB_W, THUMB_H, NULL, 0); // filtered already
 
@@ -366,7 +370,7 @@ static void reviewTop(App *a, u16 *fb, int eye, bool stereo)
 	                             : frameMix(a, a->shotSmooth, a->delayMs);
 	int filter = a->compare ? 0 : a->shotFilter;
 	drawWiggle(fb, 400, dx, dy, dw, dh, a->shotL, a->shotR, CAM_W, c.lx, c.ly, c.rx, c.ry, c.w, c.h, filter, mix,
-	           loopStep(a, filter, a->shotSmooth, a->delayMs), a->shotStrength);
+	           uiShotIsPhoto(a) ? 0 : loopStep(a, filter, a->shotSmooth, a->delayMs), a->shotStrength);
 
 	if (a->shotNum >= 0)
 		overlayPillLeft(fb, 400, dx + 8, 8, tfmt("WIG_%04d", a->shotNum));
@@ -428,22 +432,47 @@ int uiHeaderAt(int x, int y)
 
 // Filter menu layout, in content coordinates (0 = the top of the list):
 // each group is a heading and its buttons, three to a row.
+// The menu's groups: the filter groups, after Favorites if there are any.
+static u8 favList[FILTER_COUNT];
+static int favCount;
+static u32 favBits[(FILTER_COUNT + 31) / 32];
+
+void uiSetFavorites(const u32 *bits)
+{
+	memcpy(favBits, bits, sizeof(favBits));
+	favCount = 0;
+	for (int g = 0; g < filterGroupCount(); g++)
+		for (int i = 0; i < filterGroupSize(g); i++)
+		{
+			int f = filterGroupItem(g, i);
+			if (favBits[f / 32] >> (f % 32) & 1)
+				favList[favCount++] = f;
+		}
+}
+
+static bool isFavorite(int f) { return favBits[f / 32] >> (f % 32) & 1; }
+static int mFav(void) { return favCount ? 1 : 0; }
+static int mGroups(void) { return mFav() + filterGroupCount(); }
+static const char *mName(int g) { return g < mFav() ? "Favorites" : filterGroupName(g - mFav()); }
+static int mSize(int g) { return g < mFav() ? favCount : filterGroupSize(g - mFav()); }
+static int mItem(int g, int i) { return g < mFav() ? favList[i] : filterGroupItem(g - mFav(), i); }
+
 static int groupTop(int g)
 {
 	int y = 0;
 	for (int k = 0; k < g; k++)
-		y += MENU_HEAD + (filterGroupSize(k) + MENU_COLS - 1) / MENU_COLS * MENU_ROW + MENU_GROUP_GAP;
+		y += MENU_HEAD + (mSize(k) + MENU_COLS - 1) / MENU_COLS * MENU_ROW + MENU_GROUP_GAP;
 	return y;
 }
 
-static int menuHeight(void) { return groupTop(filterGroupCount()) - MENU_GROUP_GAP; }
+static int menuHeight(void) { return groupTop(mGroups()) - MENU_GROUP_GAP; }
 
 // Group and place of a filter in the menu.
 static void menuPlace(int filter, int *group, int *index)
 {
-	for (int g = 0; g < filterGroupCount(); g++)
-		for (int i = 0; i < filterGroupSize(g); i++)
-			if (filterGroupItem(g, i) == filter)
+	for (int g = 0; g < mGroups(); g++)
+		for (int i = 0; i < mSize(g); i++)
+			if (mItem(g, i) == filter)
 			{
 				*group = g;
 				*index = i;
@@ -462,41 +491,55 @@ int uiMenuTileAt(const App *a, int x, int y)
 {
 	if (y < MENU_Y || y >= MENU_Y + MENU_VIEW_H)
 		return -1;
-	for (int g = 0; g < filterGroupCount(); g++)
-		for (int i = 0; i < filterGroupSize(g); i++)
+	for (int g = 0; g < mGroups(); g++)
+		for (int i = 0; i < mSize(g); i++)
 		{
 			int bx, by;
 			menuItemPos(g, i, &bx, &by);
 			by += MENU_Y - a->menuScroll;
 			if (x >= bx - MENU_GAP / 2 && x < bx + MENU_BTN_W + MENU_GAP / 2 && y >= by - MENU_GAP / 2 &&
 			    y < by + MENU_BTN_H + MENU_GAP / 2)
-				return filterGroupItem(g, i);
+				return mItem(g, i);
 		}
 	return -1;
 }
 
 int uiMenuMove(int filter, int dx, int dy)
 {
-	if (dx)
-		return filterNext(filter, dx);
 	int g, i;
 	menuPlace(filter, &g, &i);
-	int row = i / MENU_COLS + dy, col = i % MENU_COLS, rows = (filterGroupSize(g) + MENU_COLS - 1) / MENU_COLS;
+	if (dx)
+	{
+		// Through the menu in order, across groups.
+		i += dx;
+		if (i < 0)
+		{
+			g = (g - 1 + mGroups()) % mGroups();
+			i = mSize(g) - 1;
+		}
+		else if (i >= mSize(g))
+		{
+			g = (g + 1) % mGroups();
+			i = 0;
+		}
+		return mItem(g, i);
+	}
+	int row = i / MENU_COLS + dy, col = i % MENU_COLS, rows = (mSize(g) + MENU_COLS - 1) / MENU_COLS;
 	if (row < 0) // the last row of the group above
 	{
 		if (--g < 0)
 			return filter;
-		rows = (filterGroupSize(g) + MENU_COLS - 1) / MENU_COLS;
+		rows = (mSize(g) + MENU_COLS - 1) / MENU_COLS;
 		row = rows - 1;
 	}
 	else if (row >= rows) // the first row of the group below
 	{
-		if (++g >= filterGroupCount())
+		if (++g >= mGroups())
 			return filter;
 		row = 0;
 	}
-	int k = row * MENU_COLS + col, n = filterGroupSize(g);
-	return filterGroupItem(g, k < n ? k : n - 1);
+	int k = row * MENU_COLS + col, n = mSize(g);
+	return mItem(g, k < n ? k : n - 1);
 }
 
 int uiMenuMaxScroll(void) { return menuHeight() > MENU_VIEW_H ? menuHeight() - MENU_VIEW_H : 0; }
@@ -747,16 +790,21 @@ static void filterMenu(App *a, u16 *fb)
 {
 	background(fb);
 	int off = MENU_Y - a->menuScroll;
-	for (int g = 0; g < filterGroupCount(); g++)
+	for (int g = 0; g < mGroups(); g++)
 	{
 		int hy = off + groupTop(g);
 		if (hy > MENU_Y + MENU_VIEW_H)
 			break;
-		drawText(fb, 320, &fontSmall, MENU_X + 4, hy + (MENU_HEAD - lineH(&fontSmall)) / 2 - 2, C_DIM, 255,
-		         filterGroupName(g));
-		for (int i = 0; i < filterGroupSize(g); i++)
+		int nx = MENU_X + 4;
+		if (g < mFav())
 		{
-			int f = filterGroupItem(g, i), x, y;
+			drawStar(fb, 320, nx + 5, hy + MENU_HEAD / 2.0f - 2, 5, C_STAR, 255);
+			nx += 14;
+		}
+		drawText(fb, 320, &fontSmall, nx, hy + (MENU_HEAD - lineH(&fontSmall)) / 2 - 2, C_DIM, 255, mName(g));
+		for (int i = 0; i < mSize(g); i++)
+		{
+			int f = mItem(g, i), x, y;
 			menuItemPos(g, i, &x, &y);
 			y += off;
 			if (y + MENU_BTN_H < MENU_Y - 8 || y > MENU_Y + MENU_VIEW_H)
@@ -768,7 +816,9 @@ static void filterMenu(App *a, u16 *fb)
 				drawRoundRect(fb, 320, x, y, MENU_BTN_W, MENU_BTN_H, 12, C_SURFACE2, 255);
 			if (current && !sel)
 				drawRoundRectOutline(fb, 320, x, y, MENU_BTN_W, MENU_BTN_H, 12, 1, C_ACC1, 255);
-			if (f >= FILTER_FIRST_GLITCH)
+			if (isFavorite(f))
+				drawStar(fb, 320, x + MENU_BTN_W - 9, y + 8, 4.5f, sel ? C_WHITE : C_STAR, 255);
+			if (!filterHasSwatches(f))
 			{
 				// Glitches: a little zigzag instead of color dots.
 				u16 ink = sel ? C_WHITE : C_ACC1;
@@ -789,7 +839,7 @@ static void filterMenu(App *a, u16 *fb)
 	drawText(fb, 320, &fontTitle, 16, 9, C_TEXT, 255, "Filter");
 	int g, i;
 	menuPlace(a->menuSel, &g, &i);
-	const char *note = tfmt("%s%s · L R %d%%", filterGroupName(g), filterMoves(a->menuSel) ? " · moves" : "", a->settings.strength);
+	const char *note = tfmt("%s%s", mName(g), filterMoves(a->menuSel) ? " · moves" : "");
 	drawText(fb, 320, &fontSmall, 304 - textWidth(&fontSmall, note), 17, C_DIM, 255, note);
 	int max = uiMenuMaxScroll();
 	if (max > 0)
@@ -798,8 +848,10 @@ static void filterMenu(App *a, u16 *fb)
 		drawRoundRect(fb, 320, 310, MENU_Y, 3, track, 1, C_SURFACE, 255);
 		drawRoundRectGrad(fb, 320, 310, by, 3, bh, 1, C_ACC0, C_ACC1, 255);
 	}
-	static const char *const btns[] = {"A", "B"}, *const labels[] = {"Apply", "Cancel"};
-	centeredHints(fb, 218, 2, btns, labels);
+	static const char *const btns[] = {"A", "X", "L R", "B"};
+	const char *const labels[] = {"Apply", isFavorite(a->menuSel) ? "Unfavorite" : "Favorite",
+	                              tfmt("%d%%", a->settings.strength), "Cancel"};
+	centeredHints(fb, 218, 4, btns, labels);
 }
 
 static void homeBottom(App *a, u16 *fb)
@@ -835,16 +887,27 @@ static void homeBottom(App *a, u16 *fb)
 		homeEmpty(fb);
 	else
 	{
+		if (a->homeFocus == RECENT_COUNT)
+			drawRoundRectGrad(fb, 320, ALL_BTN_X - 2, ALL_BTN_Y - 2, ALL_BTN_W + 4, ALL_BTN_H + 4, ALL_BTN_H / 2 + 2, C_ACC0, C_ACC1, 255);
 		drawRoundRect(fb, 320, ALL_BTN_X, ALL_BTN_Y, ALL_BTN_W, ALL_BTN_H, ALL_BTN_H / 2, C_SURFACE2, 255);
 		int hw = hintWidth("B", tfmt("All %d", a->shotCount));
 		drawHint(fb, 320, ALL_BTN_X + (ALL_BTN_W - hw) / 2, ALL_BTN_Y + (ALL_BTN_H - lineH(&fontSmall)) / 2, "B",
 		         tfmt("All %d", a->shotCount), C_TEXT, 255);
 		for (int i = 0; i < RECENT_COUNT && i < a->shotCount; i++)
+		{
+			if (i == a->homeFocus)
+				drawRoundRectGrad(fb, 320, recentX(i) - 3, RECENT_Y - 3, RECENT_W + 6, RECENT_H + 6, 9, C_ACC0, C_ACC1, 255);
 			thumb(a, fb, i, recentX(i), RECENT_Y, RECENT_W, RECENT_H);
+		}
 	}
 
 	if (a->timerAt)
 		centeredHints(fb, 220, 1, (const char *const[]){"B"}, (const char *const[]){"Stop self-timer"});
+	else if (a->homeFocus >= 0)
+	{
+		static const char *const btns[] = {"◀▶", "A", "B"}, *const labels[] = {"Choose", "Open", "Back"};
+		centeredHints(fb, 220, 3, btns, labels);
+	}
 	else if (a->haveFirst)
 	{
 		static const char *const btns[] = {"A", "B"}, *const labels[] = {"Second exposure", "Drop the first"};
@@ -1043,7 +1106,7 @@ static void reviewBottom(App *a, u16 *fb)
 
 static const char *const settingLabels[SET_COUNT] = {
 	"Theme", "Self-timer", "Grid lines", "Shutter sound", "Capture flash",
-	"Viewfinder", "Photo camera", "Gallery autoplay", "GIF size", "GIF shape",
+	"Viewfinder", "Photo camera", "Gallery autoplay", "GIF size", "GIF shape", "Capture defaults",
 };
 
 const char *uiSettingValue(const Settings *st, int row)
@@ -1086,7 +1149,7 @@ static const char *sizeText(u64 bytes)
 static void settingsBottom(App *a, u16 *fb)
 {
 	static const char *const notes[SET_COUNT] = {
-		[SET_GRID] = "viewfinder", [SET_FPS] = "saves battery", [SET_PHOTO_EYE] = "transition off", [SET_GIF_SIZE] = "messengers",
+		[SET_GRID] = "viewfinder", [SET_FPS] = "saves battery", [SET_PHOTO_EYE] = "transition off", [SET_RESET] = "also ▼ on home", [SET_GIF_SIZE] = "messengers",
 	};
 	background(fb);
 	int tw = drawText(fb, 320, &fontTitle, 16, 9, C_TEXT, 255, "Settings");
@@ -1109,6 +1172,15 @@ static void settingsBottom(App *a, u16 *fb)
 		if (notes[i])
 			drawText(fb, 320, &fontSmall, lx + 6, cy - lineH(&fontSmall) / 2, C_DIM, 200, notes[i]);
 
+		if (i == SET_RESET)
+		{
+			// An action: a button instead of a value.
+			const char *label = "Reset";
+			int bw = textWidth(&fontSmall, label) + 24, bx = 296 - bw;
+			drawRoundRectGrad(fb, 320, bx, y + 3, bw, SET_ROW_H - 6, (SET_ROW_H - 6) / 2, C_ACC0, C_ACC1, 255);
+			drawTextCentered(fb, 320, &fontSmall, bx + bw / 2, cy - lineH(&fontSmall) / 2, C_WHITE, 255, label);
+			continue;
+		}
 		u16 arrow = sel ? C_TEXT : C_DIM;
 		drawText(fb, 320, &fontSmall, SET_VALUE_X0, cy - lineH(&fontSmall) / 2, arrow, 255, "◀");
 		drawText(fb, 320, &fontSmall, SET_VALUE_X1 - 6 - textWidth(&fontSmall, "▶"), cy - lineH(&fontSmall) / 2, arrow, 255, "▶");

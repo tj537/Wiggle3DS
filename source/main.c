@@ -156,6 +156,7 @@ static void loadSettings(void)
 		else if (!strcmp(key, "wiggle") && !v) st->smooth = SMOOTH_OFF; // from the earlier switch
 		else if (!strcmp(key, "photo_eye")) st->photoEye = v ? 1 : 0;
 		else if (!strcmp(key, "strength") && v >= 0 && v <= 100) st->strength = v;
+		else if (!strncmp(key, "fav", 3) && key[3] >= '0' && key[3] <= '2' && !key[4]) st->favorites[key[3] - '0'] = (u32)v;
 		else if (!strcmp(key, "sound")) st->sound = v;
 		else if (!strcmp(key, "gif_square")) st->gifSquare = v;
 		else if (!strcmp(key, "tip_done")) st->tipDone = v;
@@ -172,6 +173,8 @@ static void saveSettings(void)
 	fprintf(f, "theme=%d\nfilter=%d\nsmooth=%d\nspeed=%d\nquick=%d\ntimer=%d\ngrid=%d\nautoplay=%d\ngif_half=%d\nfps=%d\nflash=%d\n",
 	        st->theme, st->filter, st->smooth, st->delayMs, st->quick, st->timer, st->grid, st->autoplay, st->gifHalf, st->fps, st->flash);
 	fprintf(f, "photo_eye=%d\nstrength=%d\n", st->photoEye, st->strength);
+	for (int i = 0; i < 3; i++)
+		fprintf(f, "fav%d=%d\n", i, (int)st->favorites[i]);
 	fprintf(f, "night=%d\nsound=%d\ngif_square=%d\ntip_done=%d\n", st->night, st->sound, st->gifSquare, st->tipDone);
 	fclose(f);
 }
@@ -182,6 +185,8 @@ static void applyTheme(void)
 	uiSetTheme(t);
 	shareSetColors(uiThemeRgb(t, 1), uiThemeRgb(t, 3), uiThemeRgb(t, 6), uiThemeRgb(t, 7), uiThemeRgb(t, 8));
 }
+
+static void resetDefaults(void);
 
 static void changeSetting(int row, int step)
 {
@@ -226,6 +231,9 @@ static void changeSetting(int row, int step)
 		st->sound = !st->sound;
 		if (st->sound)
 			soundShutter();
+		break;
+	case SET_RESET:
+		resetDefaults();
 		break;
 	case SET_GIF_SHAPE:
 		st->gifSquare = !st->gifSquare;
@@ -275,7 +283,7 @@ static void updateSettings(u32 down)
 		if (row >= 0)
 		{
 			// Tapping a row picks it; tapping it again (or an arrow) changes it.
-			if (step || row == app.settingsSel)
+			if (step || row == app.settingsSel || row == SET_RESET)
 				changeSetting(row, step ? step : 1);
 			app.settingsSel = row;
 		}
@@ -936,6 +944,15 @@ static void updateFilterMenu(u32 down)
 	static int dragY, dragScroll;
 	static bool dragged;
 	int sel = app.menuSel;
+	if (down & KEY_X)
+	{
+		// Favorite on or off; favorites are listed first.
+		app.settings.favorites[sel / 32] ^= 1u << (sel % 32);
+		uiSetFavorites(app.settings.favorites);
+		saveSettings();
+		bool on = app.settings.favorites[sel / 32] >> (sel % 32) & 1;
+		showToast(false, on ? "%s · favorite" : "%s · no longer a favorite", filterName(sel));
+	}
 	if (down & KEY_RIGHT) sel = uiMenuMove(sel, 1, 0);
 	if (down & KEY_LEFT) sel = uiMenuMove(sel, -1, 0);
 	if (down & KEY_DOWN) sel = uiMenuMove(sel, 0, 1);
@@ -987,6 +1004,52 @@ static void updateFilterMenu(u32 down)
 
 static bool tapped(bool (*hit)(int, int)) { return released && hit(startX, startY) && hit(touchX, touchY); }
 
+// Capture defaults and modes back to how the app starts the first time.
+static void resetDefaults(void)
+{
+	Settings *st = &app.settings;
+	st->filter = 0;
+	st->strength = 100;
+	st->smooth = 0;
+	st->delayMs = 120;
+	st->quick = false;
+	st->night = false;
+	camSetNight(false);
+	if (app.selfie)
+	{
+		app.selfie = false;
+		camSetSelfie(false);
+		app.liveL = camLeft();
+		app.liveR = camRight();
+	}
+	app.doubleExp = app.haveFirst = false;
+	saveSettings();
+	showToast(false, "Back to the defaults");
+	topDirty = bottomDirty = true;
+}
+
+// The recent shots by D-pad: left and right choose, A opens, B or up leaves.
+// True if the keys were used here.
+static bool updateRecentFocus(u32 down)
+{
+	int n = app.shotCount < RECENT_COUNT ? app.shotCount : RECENT_COUNT;
+	if (down & KEY_RIGHT && app.homeFocus < n)
+		app.homeFocus = app.homeFocus == n - 1 ? RECENT_COUNT : app.homeFocus + 1;
+	else if (down & KEY_LEFT)
+		app.homeFocus = app.homeFocus == RECENT_COUNT ? n - 1 : app.homeFocus - 1;
+	else if (down & (KEY_B | KEY_UP))
+		app.homeFocus = -1;
+	else if (down & KEY_A)
+	{
+		int f = app.homeFocus;
+		app.homeFocus = -1;
+		openGallery(f == RECENT_COUNT ? 0 : f);
+	}
+	else
+		return down & (KEY_DOWN | KEY_RIGHT); // nothing else for the D-pad while here
+	return true;
+}
+
 static void updateHome(u32 down)
 {
 	if (checkUndo(down))
@@ -1014,6 +1077,18 @@ static void updateHome(u32 down)
 	if (app.filterMenu)
 	{
 		updateFilterMenu(down);
+		return;
+	}
+	if (app.homeFocus >= 0 && updateRecentFocus(down))
+		return;
+	if ((down & KEY_RIGHT) && app.shotCount)
+	{
+		app.homeFocus = 0; // into the recent shots
+		return;
+	}
+	if (down & KEY_DOWN)
+	{
+		resetDefaults();
 		return;
 	}
 	int header = released && uiHeaderAt(startX, startY) == uiHeaderAt(touchX, touchY) ? uiHeaderAt(touchX, touchY) : -1;
@@ -1122,6 +1197,7 @@ int main(void)
 	storageInit();
 	loadSettings();
 	applyTheme();
+	uiSetFavorites(app.settings.favorites);
 	ptmuInit();
 	mcuHwcInit();
 	checkStatus();
@@ -1136,6 +1212,7 @@ int main(void)
 	setMode(MODE_HOME);
 	app.modeSince = 0; // no fade on the first frame
 	app.camStarting = true;
+	app.homeFocus = -1;
 	render();
 
 	storagePurgeAll();

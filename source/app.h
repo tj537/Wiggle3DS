@@ -24,6 +24,7 @@ typedef struct
 	int theme;
 	int filter, smooth, delayMs; // defaults for new photos; smooth SMOOTH_OFF: plain photos (JPG)
 	int strength;                // filter strength for new photos, 0..100 %
+	u32 favorites[3];            // filters marked as favorites, one bit each
 	bool quick;                  // quick capture: save every shot right away
 	int timer;                   // self-timer in seconds, 0 = off
 	bool grid;                   // rule-of-thirds lines on the viewfinder
@@ -41,7 +42,7 @@ typedef struct
 typedef enum
 {
 	SET_THEME, SET_TIMER, SET_GRID, SET_SOUND, SET_FLASH, SET_FPS, SET_PHOTO_EYE,
-	SET_AUTOPLAY, SET_GIF_SIZE, SET_GIF_SHAPE, SET_COUNT
+	SET_AUTOPLAY, SET_GIF_SIZE, SET_GIF_SHAPE, SET_RESET, SET_COUNT
 } SettingRow;
 
 #define MAX_SHOTS 1000
@@ -135,6 +136,7 @@ typedef struct
 
 	// Home: the live view; the filter menu previews its selection on it.
 	bool filterMenu;
+	int homeFocus; // D-pad on the recent shots: 0..RECENT_COUNT-1, RECENT_COUNT for "All", -1 if not
 	int menuSel, menuScroll; // menuScroll: pixels
 	bool camOk, selfie; // selfie: the inner camera, plain photos
 	bool camStarting;   // at start, before the camera is up
@@ -193,6 +195,7 @@ typedef struct
 } App;
 
 void uiSetTheme(int theme);
+void uiSetFavorites(const u32 *bits); // the filter menu shows them first
 const char *uiThemeName(int theme);
 u32 uiThemeRgb(int theme, int which); // 0xRRGGBB; which: 0 bg, 2 surface, 6 dim, 7/8 accents
 const char *uiSettingValue(const Settings *s, int row);

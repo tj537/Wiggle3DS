@@ -3,8 +3,7 @@
 
 // Color filters: an RGB565 -> RGB565 lookup table each, plus an optional
 // vignette (darkened corners) and for some a glitch.
-#define FILTER_COUNT 50
-#define FILTER_FIRST_GLITCH 22 // the glitches come after the colors
+#define FILTER_COUNT 68
 
 void filterInit(void);
 // Builds every table now; the export thread calls it once it is idle.
@@ -21,6 +20,8 @@ bool filterHasGlitch(int filter);
 // frame: the step of the loop, for glitches that move (0 for a still image).
 void filterGlitch(u16 *img, int w, int h, int filter, int frame);
 bool filterMoves(int filter);
+// Plain color filters show color dots in the menu, the others a zigzag.
+bool filterHasSwatches(int filter);
 // Steps of a loop of n wiggle frames with this filter: two loops for one that moves.
 int filterLoopFrames(int filter, int n);
 

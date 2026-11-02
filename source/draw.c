@@ -166,6 +166,28 @@ void drawRing(u16 *fb, int sw, float cx, float cy, float r, float thick, u16 col
 	circle(fb, sw, cx, cy, r, r - thick, color, color, alpha);
 }
 
+void drawStar(u16 *fb, int sw, float cx, float cy, float r, u16 color, int alpha)
+{
+	// Five tips at radius r, inner corners at 0.45 r: in each direction the
+	// edge is the straight line from the nearest tip to the next corner.
+	const float seg = 6.2831853f / 5, inner = r * 0.45f;
+	float p1x = r, p1y = 0, p2x = inner * cosf(seg / 2), p2y = inner * sinf(seg / 2);
+	float nx = p2y - p1y, ny = -(p2x - p1x), c = nx * p1x + ny * p1y;
+	int x0 = (int)floorf(cx - r - 1), x1 = (int)ceilf(cx + r + 1);
+	int y0 = (int)floorf(cy - r - 1), y1 = (int)ceilf(cy + r + 1);
+	for (int px = x0; px <= x1; px++)
+		for (int py = y0; py <= y1; py++)
+		{
+			float dx = px + 0.5f - cx, dy = py + 0.5f - cy, d = sqrtf(dx * dx + dy * dy);
+			float t = fmodf(atan2f(dx, -dy) + 6.2831853f, seg) / seg; // 0 at a tip
+			float phi = (t < 0.5f ? t : 1 - t) * seg;
+			float edge = c / (nx * cosf(phi) + ny * sinf(phi));
+			float cov = edge - d + 0.5f;
+			cov = cov < 0 ? 0 : cov > 1 ? 1 : cov;
+			plot(fb, sw, px, py, color, (int)(alpha * cov));
+		}
+}
+
 void drawCrescent(u16 *fb, int sw, float cx, float cy, float r, float bx, float by, float br, u16 color, int alpha)
 {
 	int x0 = (int)floorf(cx - r - 1), x1 = (int)ceilf(cx + r + 1);

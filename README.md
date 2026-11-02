@@ -1,12 +1,12 @@
 # Wiggle3DS
 
-Retro-Foto- und Wiggle-Workstation für den New 3DS (XL). Sie nimmt mit beiden Außenkameras ein 3D-Foto auf und macht daraus ein Wigglegram-GIF, eine kleine Kamerafahrt wie bei den Nimslo- und Nishika-Kameras mit mehreren Linsen. Dazu kommen normale Fotos, Selfies, ein Nachtmodus und 50 Filter von Classic bis Datamosh.
+Retro-Foto- und Wiggle-Workstation für den New 3DS (XL). Sie nimmt mit beiden Außenkameras ein 3D-Foto auf und macht daraus ein Wigglegram-GIF, eine kleine Kamerafahrt wie bei den Nimslo- und Nishika-Kameras mit mehreren Linsen. Dazu kommen normale Fotos, Selfies, ein Nachtmodus, Doppelbelichtung und 68 Filter von Classic über Datamosh bis Circuit Bending.
 
 ## Was sie kann
 
 - **Wigglegrams:** Beide Außenkameras lösen gleichzeitig aus, du tippst auf dein Motiv, und die App macht ein wackelndes GIF, das sich um diesen Punkt dreht. Übergänge: Hard cut, Smooth, Extra smooth.
 - **Normale Fotos:** Steht die Transition auf **Off**, wird die Aufnahme ein normales Foto (JPG). Beide Kamerabilder bleiben gespeichert, beim Bearbeiten machst du aus einem Foto jederzeit wieder ein Wiggle und umgekehrt.
-- **50 Filter in Gruppen:** Classic, Color, RGB & Ghost, Tape & Screen, Data Mosh, Bits & Pixels. Die Glitch-Filter verändern das Bild selbst (RGB Split, VHS, Datamosh, Pixel Sort, Melt, Keyframe …), viele davon bewegen sich. Im GIF sind das zwei Wiggle-Durchläufe mit eigenem Muster, und genau die zeigt auch die Vorschau beim Bearbeiten.
+- **68 Filter in Gruppen:** Classic, Color, RGB & Ghost, Tape & Screen, Data Mosh, Circuit Bending, Print & Pixel, Warp. Mit X im Filtermenü markierst du Favoriten, die stehen dann ganz oben. Die Glitch-Filter verändern das Bild selbst (RGB Split, VHS, Datamosh, Pixel Sort, Melt, Keyframe …), viele davon bewegen sich. Im GIF sind das zwei Wiggle-Durchläufe mit eigenem Muster, und genau die zeigt auch die Vorschau beim Bearbeiten.
 - **Doppelbelichtung:** zwei Aufnahmen übereinander wie auf einem Film, auch als Wiggle. Die erste liegt halb durchsichtig über dem Sucher, damit du die zweite ausrichten kannst.
 - **Filterstärke:** jeder Filter von 0 bis 100 %, mit L und R in Schritten von 10 %.
 - **Nachtmodus:** längere Belichtung, und vier Bilder werden zu einem gemittelt, das rauscht deutlich weniger. Bewegte Stellen bleiben vom ersten Bild, so gibt es keine Geisterbilder.
@@ -25,9 +25,11 @@ Die App ist auf Englisch.
 Oben läuft der Sucher, unten sind deine Standards und die letzten Bilder.
 
 - **A, L, R, ZL oder ZR:** auslösen
-- **Y:** Filterauswahl. Antippen zeigt den Filter sofort im Sucher, nochmal Antippen oder A übernimmt ihn, L R stellt die Stärke ein.
+- **Y:** Filterauswahl. Antippen zeigt den Filter sofort im Sucher, nochmal Antippen oder A übernimmt ihn, L R stellt die Stärke ein, X macht ihn zum Favoriten.
 - **X:** Nachtmodus an oder aus
 - **B oder „All“:** Galerie
+- **▶:** zu den letzten Bildern, dort wählst du mit ◀ ▶ und öffnest mit A
+- **▼:** alle Standards zurücksetzen (Filter, Stärke, Transition, Speed, Quick capture, Nacht, Selfie, Doppelbelichtung). Das geht auch in den Einstellungen unter „Capture defaults“.
 - **SELECT:** aufs Handy teilen
 - **START:** beenden
 

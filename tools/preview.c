@@ -68,6 +68,7 @@ int main(int argc, char **argv)
 	const char *dir = argv[2];
 	filterInit();
 	uiSetTheme(0);
+	app.homeFocus = -1;
 	app.settings = (Settings){.strength = 100, .filter = 4, .delayMs = 120, .fps = 20, .flash = true, .smooth = 1};
 	app.freeBytes = 3ULL << 30;
 	app.battery = 76;
@@ -113,10 +114,16 @@ int main(int argc, char **argv)
 	app.firstR = pair[0];
 	app.settings.strength = 60;
 	render(dir, "home_double");
+	app.homeFocus = 1;
+	render(dir, "home_focus");
+	app.homeFocus = -1;
 	app.doubleExp = app.haveFirst = false;
 	app.settings.strength = 100;
 	app.filterMenu = true;
-	app.menuSel = 45;
+	app.menuSel = 53;
+	app.settings.favorites[0] = 1u << 23 | 1u << 22;
+	app.settings.favorites[1] = 1u << (53 - 32);
+	uiSetFavorites(app.settings.favorites);
 	app.menuScroll = 0;
 	uiMenuReveal(&app);
 	render(dir, "filter_menu");
