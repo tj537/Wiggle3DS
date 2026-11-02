@@ -6,7 +6,7 @@ Retro-Foto- und Wiggle-Workstation für den New 3DS (XL). Sie nimmt mit beiden A
 
 - **Wigglegrams:** Beide Außenkameras lösen gleichzeitig aus, du tippst auf dein Motiv, und die App macht ein wackelndes GIF, das sich um diesen Punkt dreht. Übergänge: Hard cut, Smooth, Extra smooth.
 - **Normale Fotos:** Steht die Transition auf **Off**, wird die Aufnahme ein normales Foto (JPG). Beide Kamerabilder bleiben gespeichert, beim Bearbeiten machst du aus einem Foto jederzeit wieder ein Wiggle und umgekehrt.
-- **50 Filter in Gruppen:** Classic, Color, RGB & Ghost, Tape & Screen, Data Mosh, Bits & Pixels. Die Glitch-Filter verändern das Bild selbst (RGB Split, VHS, Datamosh, Pixel Sort, Melt, Keyframe …), viele davon bewegen sich, im Sucher genauso wie im GIF.
+- **50 Filter in Gruppen:** Classic, Color, RGB & Ghost, Tape & Screen, Data Mosh, Bits & Pixels. Die Glitch-Filter verändern das Bild selbst (RGB Split, VHS, Datamosh, Pixel Sort, Melt, Keyframe …), viele davon bewegen sich. Im GIF sind das zwei Wiggle-Durchläufe mit eigenem Muster, und genau die zeigt auch die Vorschau beim Bearbeiten.
 - **Doppelbelichtung:** zwei Aufnahmen übereinander wie auf einem Film, auch als Wiggle. Die erste liegt halb durchsichtig über dem Sucher, damit du die zweite ausrichten kannst.
 - **Filterstärke:** jeder Filter von 0 bis 100 %, mit L und R in Schritten von 10 %.
 - **Nachtmodus:** längere Belichtung, und vier Bilder werden zu einem gemittelt, das rauscht deutlich weniger. Bewegte Stellen bleiben vom ersten Bild, so gibt es keine Geisterbilder.

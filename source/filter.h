@@ -21,7 +21,7 @@ bool filterHasGlitch(int filter);
 // frame: the step of the loop, for glitches that move (0 for a still image).
 void filterGlitch(u16 *img, int w, int h, int filter, int frame);
 bool filterMoves(int filter);
-// Steps of a loop of n wiggle frames with this filter: more for one that moves.
+// Steps of a loop of n wiggle frames with this filter: two loops for one that moves.
 int filterLoopFrames(int filter, int n);
 
 // The filter menu: groups of filters, and stepping through them in that order.

@@ -120,8 +120,9 @@ bool filterMoves(int filter) { return filter > 0 && filter < FILTER_COUNT && def
 
 int filterLoopFrames(int filter, int n)
 {
-	// At least 8 steps, whole wiggle loops, so the glitch has time to move.
-	return filterMoves(filter) && n < 8 ? (8 + n - 1) / n * n : n;
+	// Two wiggle loops, each with its own pattern: enough to see it move,
+	// and the GIF stays small.
+	return filterMoves(filter) ? 2 * n : n;
 }
 
 // Built on first use (or by the export thread in the background after
