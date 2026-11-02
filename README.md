@@ -123,6 +123,10 @@ make send-cia IP=192.168.x.y
 
 Kopier `Wiggle3DS.cia` auf die SD-Karte, zum Beispiel nach `cias/`. In FBI öffnest du **SD → cias**, wählst die Datei und dann **Install and delete CIA** (oder **Install CIA**).
 
+## Lizenz
+
+MIT, siehe [LICENSE](LICENSE). Die Teile von anderen stehen unter ihren eigenen Lizenzen (unten).
+
 ## Fremder Code
 
 - `source/qrcodegen.c/.h`: [QR Code generator](https://github.com/nayuki/QR-Code-generator) von Project Nayuki (MIT-Lizenz)
