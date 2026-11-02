@@ -15,8 +15,9 @@ Aktueller Stand: Schritt 1 ist fertig. Die App nimmt in 640x480 auf, jedes GIF b
 Die App ist auf Englisch.
 
 - **Startscreen:** Oben läuft die Kamera, unten ist immer die Galerie. A, L oder R macht ein Foto.
+- **Filter:** Der Filter-Button oben in der Galerie (oder Y) öffnet die Filterauswahl. Jeder Filter wird dort direkt am aktuellen Kamerabild gezeigt. Der gewählte Filter wirkt live im Sucher und gilt für neue Fotos. Zur Auswahl stehen Original, Vivid, Warm, Cool, Dream, Cinema, Vintage, Lomo, Sepia, Mono und Noir.
 - **Durchblättern:** Mit dem Steuerkreuz oder durch Antippen eines Bildes wählst du eine Aufnahme. Sie erscheint oben als Standbild, Y spielt sie ab. A oder ein zweites Antippen öffnet sie zum Bearbeiten, X löscht sie nach einer Rückfrage, B bringt dich zurück zur Kamera.
-- **Bearbeiten:** Tipp auf dein Motiv, um den Drehpunkt zu setzen. Mit L/R oder ◀/▶ justierst du fein, das Tempo stellst du mit dem Regler oder ▲/▼ ein. A speichert, B geht zurück.
+- **Bearbeiten:** Tipp auf dein Motiv, um den Drehpunkt zu setzen, mit L/R justierst du fein. Das Tempo stellst du mit ◀/▶ oder dem Regler ein, den Filter mit ▲/▼ oder durch Antippen der Filteranzeige auf dem Foto. A speichert das GIF mit Filter, B geht zurück. Das Originalfoto bleibt ungefiltert gespeichert, du kannst den Filter also jederzeit ändern.
 - **3D-Regler:** Oben siehst du die Aufnahme dann in echtem 3D.
 - **Aufs Handy (SELECT oder "Share" oben rechts):** Oben erscheint ein QR-Code. Scannst du ihn mit der Handy-Kamera (Handy im selben WLAN), öffnet sich eine Seite mit allen GIFs. Dort hältst du ein GIF gedrückt und wählst "Zu Fotos hinzufügen", oder du tippst auf "Save". Der kleine Webserver (Port 8080) läuft nur, solange dieser Screen offen ist.
 
@@ -64,6 +65,6 @@ Falls der 3DS nicht automatisch gefunden wird, häng die angezeigte IP-Adresse m
 - `tools/preview.c` rendert alle Screens am Mac als BMP, damit du die Oberfläche ohne 3DS prüfen kannst (Eingabe: ein rohes RGB565-Stereopaar mit 640x480):
 
   ```bash
-  clang -O2 -I/opt/devkitpro/libctru/include -o preview tools/preview.c source/ui.c source/draw.c source/font_data.c source/wiggle.c -lm
+  clang -O2 -I/opt/devkitpro/libctru/include -o preview tools/preview.c source/ui.c source/draw.c source/font_data.c source/wiggle.c source/qrcodegen.c source/filter.c -lm
   ./preview paar.raw ausgabe/
   ```

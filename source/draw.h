@@ -26,6 +26,11 @@ void drawRing(u16 *fb, int sw, float cx, float cy, float r, float thick, u16 col
 void drawImage(u16 *fb, int sw, int dx, int dy, int dw, int dh,
                const u16 *img, int stride, int sx, int sy, int w, int h, const u16 *lut, int radius);
 
+// Darkens the corners of a w*h region: on screen at (x, y) (clipped to
+// rounded corners of `radius`), or of a row-major image. Strength 0..255.
+void drawVignette(u16 *fb, int sw, int x, int y, int w, int h, int strength, int radius);
+void vignetteRows(u16 *img, int w, int h, int strength);
+
 // Text: (x, y) is the top-left of the line; returns the advance width.
 int textWidth(const Font *font, const char *text);
 int drawText(u16 *fb, int sw, const Font *font, int x, int y, u16 color, int alpha, const char *text);

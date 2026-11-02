@@ -6,6 +6,7 @@
 #include <string.h>
 #include "../source/app.h"
 #include "../source/qrcodegen.h"
+#include "../source/filter.h"
 
 static App app;
 static u16 top[2][400 * 240], bottom[320 * 240];
@@ -62,6 +63,7 @@ int main(int argc, char **argv)
 	fread(pair, 2, CAM_W * CAM_H * 2, f);
 	fclose(f);
 	const char *dir = argv[2];
+	filterInit();
 
 	app.now = 100000;
 	app.camOk = true;
@@ -84,7 +86,14 @@ int main(int argc, char **argv)
 		app.gridInfo[i] = (ShotInfo){0, 0, 12, 2, 120, 0};
 		downscale(app.grid[i], THUMB_W, THUMB_H, pair[0], i * 20, i * 10, CAM_W - 140, CAM_H - 70);
 	}
+	app.filter = 4;
+	for (int i = 0; i < app.shotCount; i++)
+		app.gridInfo[i].filter = i % FILTER_COUNT;
 	render(dir, "home");
+	app.filterMenu = true;
+	app.menuSel = 7;
+	render(dir, "filter_menu");
+	app.filterMenu = false;
 	app.browsing = true;
 	app.sel = 1;
 	downscale(app.previewL, PREVIEW_W, PREVIEW_H, pair[0], 0, 0, CAM_W, CAM_H);
@@ -102,6 +111,7 @@ int main(int argc, char **argv)
 	app.pivotY = 200;
 	app.offset = (Offset){12, 2};
 	app.delayMs = 120;
+	app.shotFilter = 7;
 	render(dir, "review");
 	app.toastAt = app.now - 600;
 	strcpy(app.toast, "Saved · WIG_0003.gif");

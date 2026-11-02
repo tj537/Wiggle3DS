@@ -1,6 +1,7 @@
 #include <string.h>
 #include "app.h"
 #include "draw.h"
+#include "filter.h"
 #include "qrcodegen.h"
 
 // Dark purple theme.
@@ -16,6 +17,9 @@
 #define C_RED COL565(255, 76, 92)
 #define C_BLACK 0
 #define C_WHITE 0xFFFF
+
+#define FILTER_PILL_X (CARD_X + 8)
+#define FILTER_PILL_Y (CARD_Y + CARD_H - 28)
 
 #define FADE_MS 160
 #define FLASH_MS 220
@@ -97,6 +101,16 @@ static void fitTop(int w, int h, int *dx, int *dy, int *dw, int *dh)
 	*dy = (240 - *dh) / 2;
 }
 
+// drawImage with a filter's colors and vignette.
+static void drawFiltered(u16 *fb, int sw, int dx, int dy, int dw, int dh,
+                         const u16 *img, int stride, int sx, int sy, int w, int h, int filter, int radius)
+{
+	drawImage(fb, sw, dx, dy, dw, dh, img, stride, sx, sy, w, h, filterLut(filter), radius);
+	int v = filterVignette(filter);
+	if (v)
+		drawVignette(fb, sw, dx, dy, dw, dh, v, radius);
+}
+
 static bool phase(const App *a, int delayMs) { return (a->now / (u64)delayMs) & 1; }
 
 static const ShotInfo *selectedInfo(const App *a)
@@ -130,11 +144,13 @@ static void homeTop(App *a, u16 *fb, int eye, bool stereo)
 	if (!a->browsing)
 	{
 		if (a->camOk && a->liveL)
-			drawImage(fb, 400, 40, 0, 320, 240, eye ? a->liveR : a->liveL, CAM_W, 0, 0, CAM_W, CAM_H, NULL, 0);
+			drawFiltered(fb, 400, 40, 0, 320, 240, eye ? a->liveR : a->liveL, CAM_W, 0, 0, CAM_W, CAM_H, a->filter, 0);
 		else
 			drawTextCentered(fb, 400, &fontBody, 200, 112, C_DIM, 255, "Camera unavailable");
 		if (stereo)
 			overlayPillLeft(fb, 400, 48, 8, "3D");
+		if (a->filter)
+			overlayPill(fb, 400, 200, 212, filterName(a->filter));
 		return;
 	}
 
@@ -144,17 +160,19 @@ static void homeTop(App *a, u16 *fb, int eye, bool stereo)
 	const ShotInfo *info = selectedInfo(a);
 	int delay = shotDelay(info);
 	bool right = stereo ? eye : a->playing && phase(a, delay);
+	int filter = info ? info->filter : 0;
 	if (a->previewNum == a->shots[a->sel])
-		drawImage(fb, 400, 40, 0, PREVIEW_W, PREVIEW_H, right ? a->previewR : a->previewL, PREVIEW_W, 0, 0, PREVIEW_W, PREVIEW_H, NULL, 0);
+		drawFiltered(fb, 400, 40, 0, PREVIEW_W, PREVIEW_H, right ? a->previewR : a->previewL, PREVIEW_W, 0, 0, PREVIEW_W, PREVIEW_H, filter, 0);
 	else if (a->gridOk[cur])
-		drawImage(fb, 400, 40, 0, PREVIEW_W, PREVIEW_H, a->grid[cur], THUMB_W, 0, 0, THUMB_W, THUMB_H, NULL, 0);
+		drawFiltered(fb, 400, 40, 0, PREVIEW_W, PREVIEW_H, a->grid[cur], THUMB_W, 0, 0, THUMB_W, THUMB_H, filter, 0);
 
 	overlayPillLeft(fb, 400, 48, 8, tfmt("WIG_%04d", a->shots[a->sel]));
 	overlayPillRight(fb, 400, 352, 8, tfmt("%d / %d", a->sel + 1, a->shotCount));
 	if (stereo)
 		overlayPill(fb, 400, 200, 212, "3D view");
 	else if (info)
-		overlayPill(fb, 400, 200, 212, a->playing ? tfmt("Playing · %d ms", delay) : "Paused");
+		overlayPill(fb, 400, 200, 212, a->playing ? tfmt("%s · playing · %d ms", filterName(filter), delay)
+		                                          : tfmt("%s · paused", filterName(filter)));
 }
 
 static void reviewTop(App *a, u16 *fb, int eye, bool stereo)
@@ -164,11 +182,11 @@ static void reviewTop(App *a, u16 *fb, int eye, bool stereo)
 	int dx, dy, dw, dh;
 	fitTop(c.w, c.h, &dx, &dy, &dw, &dh);
 	bool right = stereo ? eye : phase(a, a->delayMs);
-	drawImage(fb, 400, dx, dy, dw, dh, right ? a->shotR : a->shotL, CAM_W,
-	          right ? c.rx : c.lx, right ? c.ry : c.ly, c.w, c.h, NULL, 0);
+	drawFiltered(fb, 400, dx, dy, dw, dh, right ? a->shotR : a->shotL, CAM_W,
+	             right ? c.rx : c.lx, right ? c.ry : c.ly, c.w, c.h, a->shotFilter, 0);
 
 	overlayPillLeft(fb, 400, dx + 8, 8, a->shotNum < 0 ? "New" : tfmt("WIG_%04d", a->shotNum));
-	overlayPill(fb, 400, 200, 212, stereo ? "3D view" : tfmt("%d ms", a->delayMs));
+	overlayPill(fb, 400, 200, 212, stereo ? "3D view" : tfmt("%s · %d ms", filterName(a->shotFilter), a->delayMs));
 }
 
 static void shareTop(App *a, u16 *fb);
@@ -197,10 +215,32 @@ void uiDrawTop(App *a, u16 *left, u16 *right, bool stereo)
 
 static int shareButtonWidth(void) { return hintWidth("SELECT", "Share") + 16; }
 
+static int filterButtonWidth(const App *a)
+{
+	return 23 + textWidth(&fontSmall, filterName(a->filter)) + 5 + textWidth(&fontSmall, "▼") + 10;
+}
+
+bool uiFilterButtonHit(const App *a, int x, int y)
+{
+	int fw = filterButtonWidth(a), fx = 308 - shareButtonWidth() - 6 - fw;
+	return x >= fx - 3 && x < fx + fw + 3 && y >= HEADER_BTN_Y - 4 && y < HEADER_BTN_Y + HEADER_BTN_H + 4;
+}
+
+int uiMenuTileAt(int x, int y)
+{
+	for (int i = 0; i < FILTER_COUNT; i++)
+	{
+		int tx = GRID_X + (i % GRID_COLS) * (CELL_W + CELL_GAP), ty = MENU_Y + (i / GRID_COLS) * MENU_ROW;
+		if (x >= tx - CELL_GAP / 2 && x < tx + CELL_W + CELL_GAP / 2 && y >= ty - 4 && y < ty + MENU_ROW - 4)
+			return i;
+	}
+	return -1;
+}
+
 bool uiShareButtonHit(int x, int y)
 {
 	int w = shareButtonWidth();
-	return x >= 308 - w - 4 && x < 312 && y >= SHARE_BTN_Y - 4 && y < SHARE_BTN_Y + SHARE_BTN_H + 4;
+	return x >= 308 - w - 4 && x < 312 && y >= HEADER_BTN_Y - 4 && y < HEADER_BTN_Y + HEADER_BTN_H + 4;
 }
 
 static void homeEmpty(u16 *fb)
@@ -216,14 +256,53 @@ static void homeEmpty(u16 *fb)
 	drawTextCentered(fb, 320, &fontSmall, 160, 156, C_DIM, 255, "Take a photo and save it to see it here.");
 }
 
+// Filter picker over the whole bottom screen: every filter on the current
+// camera frame (or the selected shot while browsing).
+static void filterMenu(App *a, u16 *fb)
+{
+	background(fb);
+	drawText(fb, 320, &fontTitle, 16, 9, C_TEXT, 255, "Filters");
+	int hw = hintWidth("B", "Close");
+	drawHint(fb, 320, 304 - hw, 16, "B", "Close", C_DIM, 255);
+
+	const u16 *img = a->liveL;
+	int stride = CAM_W, sx = 0, sy = 0, w = CAM_W, h = CAM_H;
+	if (a->browsing && a->gridOk[a->sel % GRID_PAGE])
+	{
+		img = a->grid[a->sel % GRID_PAGE];
+		stride = w = THUMB_W;
+		h = THUMB_H;
+	}
+	for (int i = 0; i < FILTER_COUNT; i++)
+	{
+		int x = GRID_X + (i % GRID_COLS) * (CELL_W + CELL_GAP), y = MENU_Y + (i / GRID_COLS) * MENU_ROW;
+		if (i == a->menuSel)
+			drawRoundRectGrad(fb, 320, x - 3, y - 3, CELL_W + 6, CELL_H + 6, 9, C_ACC0, C_ACC1, 255);
+		if (img)
+			drawFiltered(fb, 320, x, y, CELL_W, CELL_H, img, stride, sx, sy, w, h, i, 6);
+		else
+			drawRoundRect(fb, 320, x, y, CELL_W, CELL_H, 6, C_SURFACE2, 255);
+		bool current = i == a->filter;
+		drawTextCentered(fb, 320, &fontSmall, x + CELL_W / 2, y + CELL_H + 3, current ? C_TEXT : C_DIM, 255,
+		                 current ? tfmt("✓ %s", filterName(i)) : filterName(i));
+	}
+}
+
 static void homeBottom(App *a, u16 *fb)
 {
 	background(fb);
 	drawTextGrad(fb, 320, &fontTitle, 16, 9, C_ACC0, C_ACC1, "Wiggle3DS");
 
-	int sw = shareButtonWidth();
-	drawRoundRect(fb, 320, 308 - sw, SHARE_BTN_Y, sw, SHARE_BTN_H, SHARE_BTN_H / 2, C_SURFACE2, 255);
-	drawHint(fb, 320, 308 - sw + 8, SHARE_BTN_Y + (SHARE_BTN_H - lineH(&fontSmall)) / 2, "SELECT", "Share", C_TEXT, 255);
+	int sw = shareButtonWidth(), ty = HEADER_BTN_Y + (HEADER_BTN_H - lineH(&fontSmall)) / 2;
+	drawRoundRect(fb, 320, 308 - sw, HEADER_BTN_Y, sw, HEADER_BTN_H, HEADER_BTN_H / 2, C_SURFACE2, 255);
+	drawHint(fb, 320, 308 - sw + 8, ty, "SELECT", "Share", C_TEXT, 255);
+
+	// Filter button: a gradient dot, the current filter and a caret.
+	int fw = filterButtonWidth(a), fx = 308 - sw - 6 - fw;
+	drawRoundRect(fb, 320, fx, HEADER_BTN_Y, fw, HEADER_BTN_H, HEADER_BTN_H / 2, a->filterMenu ? C_STROKE : C_SURFACE2, 255);
+	drawCircleGrad(fb, 320, fx + 13, HEADER_BTN_Y + HEADER_BTN_H / 2.0f, 4.5f, C_ACC0, C_ACC1, 255);
+	int nx = fx + 23 + drawText(fb, 320, &fontSmall, fx + 23, ty, C_TEXT, 255, filterName(a->filter));
+	drawText(fb, 320, &fontSmall, nx + 5, ty, C_DIM, 255, "▼");
 
 	if (!a->shotCount)
 		homeEmpty(fb);
@@ -237,7 +316,7 @@ static void homeBottom(App *a, u16 *fb)
 			if (a->browsing && i == a->sel % GRID_PAGE)
 				drawRoundRectGrad(fb, 320, x - 3, y - 3, CELL_W + 6, CELL_H + 6, 9, C_ACC0, C_ACC1, 255);
 			if (a->gridOk[i])
-				drawImage(fb, 320, x, y, CELL_W, CELL_H, a->grid[i], THUMB_W, 0, 0, THUMB_W, THUMB_H, NULL, 6);
+				drawFiltered(fb, 320, x, y, CELL_W, CELL_H, a->grid[i], THUMB_W, 0, 0, THUMB_W, THUMB_H, a->gridInfo[i].filter, 6);
 			else
 			{
 				drawRoundRect(fb, 320, x, y, CELL_W, CELL_H, 6, C_SURFACE2, 255);
@@ -253,12 +332,15 @@ static void homeBottom(App *a, u16 *fb)
 	}
 	else
 	{
-		static const char *const btns[] = {"A", "◀▶", "START"}, *const labels[] = {"Capture", "Browse", "Quit"};
+		static const char *const btns[] = {"A", "Y", "◀▶", "START"}, *const labels[] = {"Capture", "Filter", "Browse", "Quit"};
 		if (!a->shotCount)
-			centeredHints(fb, 218, 2, (const char *const[]){"A", "START"}, (const char *const[]){"Capture", "Quit"});
+			centeredHints(fb, 218, 3, (const char *const[]){"A", "Y", "START"}, (const char *const[]){"Capture", "Filter", "Quit"});
 		else
-			centeredHints(fb, 218, 3, btns, labels);
+			centeredHints(fb, 218, 4, btns, labels);
 	}
+
+	if (a->filterMenu)
+		filterMenu(a, fb);
 
 	if (a->confirmDelete)
 	{
@@ -277,7 +359,11 @@ static void reviewBottom(App *a, u16 *fb)
 	background(fb);
 
 	drawShadow(fb, 320, CARD_X, CARD_Y, CARD_W, CARD_H, 10, 160);
-	drawImage(fb, 320, CARD_X, CARD_Y, CARD_W, CARD_H, a->shotL, CAM_W, 0, 0, CAM_W, CAM_H, NULL, 10);
+	drawFiltered(fb, 320, CARD_X, CARD_Y, CARD_W, CARD_H, a->shotL, CAM_W, 0, 0, CAM_W, CAM_H, a->shotFilter, 10);
+	const char *fl = tfmt("▲▼  %s", filterName(a->shotFilter));
+	int fw = textWidth(&fontSmall, fl) + 20;
+	drawRoundRect(fb, 320, FILTER_PILL_X, FILTER_PILL_Y, fw, 20, 10, C_BLACK, 150);
+	drawText(fb, 320, &fontSmall, FILTER_PILL_X + 10, FILTER_PILL_Y + (20 - lineH(&fontSmall)) / 2, C_TEXT, 255, fl);
 	float px = CARD_X + (a->pivotX + 0.5f) * CARD_W / CAM_W, py = CARD_Y + (a->pivotY + 0.5f) * CARD_H / CAM_H;
 	drawCircle(fb, 320, px, py, 12, C_BLACK, 70);
 	drawRing(fb, 320, px, py, 10, 2, C_TEXT, 240);
@@ -291,7 +377,8 @@ static void reviewBottom(App *a, u16 *fb)
 	}
 
 	// Speed slider.
-	drawText(fb, 320, &fontSmall, 16, SLIDER_Y - lineH(&fontSmall) / 2, C_DIM, 255, "Speed");
+	drawHint(fb, 320, 12, SLIDER_Y - lineH(&fontSmall) / 2, "◀▶", "", C_DIM, 255);
+	drawText(fb, 320, &fontSmall, 12 + hintWidth("◀▶", "") + 4, SLIDER_Y - lineH(&fontSmall) / 2, C_DIM, 255, "Speed");
 	float k = (float)(a->delayMs - DELAY_MIN) / (DELAY_MAX - DELAY_MIN);
 	int knob = SLIDER_X0 + (int)(k * (SLIDER_X1 - SLIDER_X0));
 	drawRoundRect(fb, 320, SLIDER_X0, SLIDER_Y - 2, SLIDER_X1 - SLIDER_X0, 4, 2, C_SURFACE2, 255);
@@ -413,6 +500,11 @@ bool uiBottomAnimating(const App *a)
 }
 
 // ---- touch targets ----
+
+bool uiFilterPillHit(int x, int y)
+{
+	return x >= FILTER_PILL_X - 4 && x < FILTER_PILL_X + 110 && y >= FILTER_PILL_Y - 4 && y < FILTER_PILL_Y + 24;
+}
 
 Hit uiReviewHit(int x, int y)
 {

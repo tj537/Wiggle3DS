@@ -208,6 +208,65 @@ void drawImage(u16 *fb, int sw, int dx, int dy, int dw, int dh,
 	}
 }
 
+// ---- vignette ----
+
+// Darkening (0..255) at normalized squared distance t from the center
+// (0 = center, 1 = edge midpoint, 2 = corner).
+static inline int vignetteAlpha(float t, int strength)
+{
+	float k = (t - 0.35f) / 1.65f;
+	if (k <= 0)
+		return 0;
+	if (k > 1)
+		k = 1;
+	return (int)(strength * k * k * (3 - 2 * k));
+}
+
+static inline float axis(int i, int n)
+{
+	float d = (i + 0.5f - n / 2.0f) / (n / 2.0f);
+	return d * d;
+}
+
+void drawVignette(u16 *fb, int sw, int x, int y, int w, int h, int strength, int radius)
+{
+	for (int px = 0; px < w; px++)
+	{
+		int fx = x + px;
+		if (fx < 0 || fx >= sw)
+			continue;
+		float ax = axis(px, w);
+		for (int py = 0; py < h; py++)
+		{
+			int fy = y + py;
+			if (fy < 0 || fy >= 240)
+				continue;
+			int a = vignetteAlpha(ax + axis(py, h), strength);
+			if (a && radius && (px < radius || px >= w - radius) && (py < radius || py >= h - radius))
+				a = (int)(a * roundRectCov(px, py, 0, 0, w, h, radius));
+			if (a)
+			{
+				u16 *p = &PIX(fb, fx, fy);
+				*p = blend(*p, 0, a);
+			}
+		}
+	}
+}
+
+void vignetteRows(u16 *img, int w, int h, int strength)
+{
+	for (int py = 0; py < h; py++)
+	{
+		float ay = axis(py, h);
+		for (int px = 0; px < w; px++)
+		{
+			int a = vignetteAlpha(axis(px, w) + ay, strength);
+			if (a)
+				img[py * w + px] = blend(img[py * w + px], 0, a);
+		}
+	}
+}
+
 // ---- text ----
 
 static const Glyph *findGlyph(const Font *f, u32 code)

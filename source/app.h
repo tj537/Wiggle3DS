@@ -20,9 +20,9 @@ typedef enum
 
 // ---- bottom screen layout, used for drawing and touch ----
 
-// Home: share button in the header, gallery grid
-#define SHARE_BTN_Y 9
-#define SHARE_BTN_H 22
+// Home: filter and share buttons in the header, gallery grid
+#define HEADER_BTN_Y 9
+#define HEADER_BTN_H 22
 #define GRID_COLS 4
 #define GRID_ROWS 3
 #define GRID_PAGE (GRID_COLS * GRID_ROWS)
@@ -32,12 +32,16 @@ typedef enum
 #define CELL_H 52
 #define CELL_GAP 6
 
+// Filter menu: tiles on the gallery grid's columns, with names below
+#define MENU_Y 36
+#define MENU_ROW (CELL_H + 16)
+
 // Review
 #define CARD_X 48
 #define CARD_Y 8
 #define CARD_W 224
 #define CARD_H 168
-#define SLIDER_X0 72
+#define SLIDER_X0 86
 #define SLIDER_X1 232
 #define SLIDER_Y 192
 #define BTN_Y 210
@@ -54,6 +58,9 @@ typedef struct
 
 	// Home: `browsing` shows the selected shot on top instead of the camera.
 	bool browsing, playing;
+	int filter; // camera filter, also used for new shots
+	bool filterMenu;
+	int menuSel;
 	bool camOk;
 	const u16 *liveL, *liveR;
 
@@ -68,7 +75,7 @@ typedef struct
 
 	// Review: shotNum is -1 until the shot has been saved once.
 	u16 *shotL, *shotR;
-	int shotNum, pivotX, pivotY, delayMs;
+	int shotNum, pivotX, pivotY, delayMs, shotFilter;
 	Offset offset;
 	bool saving, fromGallery;
 
@@ -97,3 +104,6 @@ Hit uiReviewHit(int x, int y);
 Hit uiDeleteDialogHit(int x, int y);
 int uiCellAt(int x, int y);
 bool uiShareButtonHit(int x, int y);
+bool uiFilterButtonHit(const App *a, int x, int y);
+bool uiFilterPillHit(int x, int y); // review: the filter pill on the photo
+int uiMenuTileAt(int x, int y);

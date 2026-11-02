@@ -18,8 +18,7 @@
 
 typedef struct
 {
-	s32 pivotX, pivotY, dx, dy, delayMs;
-	s32 reserved; // was the color filter
+	s32 pivotX, pivotY, dx, dy, delayMs, filter;
 } ShotInfo;
 
 void storageInit(void);

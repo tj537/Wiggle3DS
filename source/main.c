@@ -1,8 +1,10 @@
 #include <3ds.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "app.h"
+#include "filter.h"
 #include "gif.h"
 #include "qrcodegen.h"
 #include "share.h"
@@ -140,6 +142,7 @@ static void capture(void)
 	app.pivotY = CAM_H / 2;
 	app.offset = wiggleMatch(app.pivotX, app.pivotY);
 	app.delayMs = 120;
+	app.shotFilter = app.filter;
 	app.fromGallery = false;
 }
 
@@ -158,6 +161,7 @@ static void openShot(int num)
 	app.pivotY = info.pivotY;
 	app.offset = (Offset){info.dx, info.dy};
 	app.delayMs = info.delayMs;
+	app.shotFilter = info.filter >= 0 && info.filter < FILTER_COUNT ? info.filter : 0;
 	app.fromGallery = true;
 }
 
@@ -184,15 +188,24 @@ static void saveShot(void)
 	bool isNew = app.shotNum < 0;
 	if (isNew)
 		app.shotNum = storageNextNumber();
-	ShotInfo info = {app.pivotX, app.pivotY, app.offset.dx, app.offset.dy, app.delayMs, 0};
+	ShotInfo info = {app.pivotX, app.pivotY, app.offset.dx, app.offset.dy, app.delayMs, app.shotFilter};
 	char path[64];
 	storageGifPath(app.shotNum, path, sizeof(path));
+
+	// The GIF gets the filtered crops; the stored photo stays unfiltered.
 	Crop c = wiggleCrop(app.offset);
-	GifFrame frames[2] = {
-		{shotL, CAM_W, c.lx, c.ly},
-		{shotR, CAM_W, c.rx, c.ry},
-	};
-	if (storageSave(app.shotNum, shotL, shotR, &info) && gifWrite(path, frames, 2, c.w, c.h, app.delayMs))
+	u16 *fl = malloc(c.w * c.h * 2), *fr = malloc(c.w * c.h * 2);
+	bool ok = fl && fr;
+	if (ok)
+	{
+		filterApply(fl, shotL, CAM_W, c.lx, c.ly, c.w, c.h, app.shotFilter);
+		filterApply(fr, shotR, CAM_W, c.rx, c.ry, c.w, c.h, app.shotFilter);
+		GifFrame frames[2] = {{fl, c.w, 0, 0}, {fr, c.w, 0, 0}};
+		ok = storageSave(app.shotNum, shotL, shotR, &info) && gifWrite(path, frames, 2, c.w, c.h, app.delayMs);
+	}
+	free(fl);
+	free(fr);
+	if (ok)
 		showToast(false, "Saved · WIG_%04d.gif", app.shotNum);
 	else
 		showToast(true, "Saving failed");
@@ -203,7 +216,7 @@ static void saveShot(void)
 
 static void updateReview(u32 down)
 {
-	if (touching && inRect(startX, startY, CARD_X, CARD_Y, CARD_W, CARD_H))
+	if (touching && inRect(startX, startY, CARD_X, CARD_Y, CARD_W, CARD_H) && !uiFilterPillHit(startX, startY))
 	{
 		int tx = touchX < CARD_X ? CARD_X : touchX >= CARD_X + CARD_W ? CARD_X + CARD_W - 1 : touchX;
 		int ty = touchY < CARD_Y ? CARD_Y : touchY >= CARD_Y + CARD_H ? CARD_Y + CARD_H - 1 : touchY;
@@ -223,14 +236,18 @@ static void updateReview(u32 down)
 	}
 
 	Hit hit = released && uiReviewHit(startX, startY) == uiReviewHit(touchX, touchY) ? uiReviewHit(touchX, touchY) : HIT_NONE;
-	if ((down & (KEY_L | KEY_LEFT)) && app.offset.dx > -MAX_DX)
+	if ((down & KEY_L) && app.offset.dx > -MAX_DX)
 		app.offset.dx--;
-	if ((down & (KEY_R | KEY_RIGHT)) && app.offset.dx < MAX_DX)
+	if ((down & KEY_R) && app.offset.dx < MAX_DX)
 		app.offset.dx++;
-	if ((down & KEY_UP) && app.delayMs > DELAY_MIN)
+	if ((down & KEY_LEFT) && app.delayMs > DELAY_MIN)
 		app.delayMs -= DELAY_STEP;
-	if ((down & KEY_DOWN) && app.delayMs < DELAY_MAX)
+	if ((down & KEY_RIGHT) && app.delayMs < DELAY_MAX)
 		app.delayMs += DELAY_STEP;
+	if (down & KEY_UP)
+		app.shotFilter = (app.shotFilter + FILTER_COUNT - 1) % FILTER_COUNT;
+	if ((down & KEY_DOWN) || (released && uiFilterPillHit(startX, startY) && uiFilterPillHit(touchX, touchY)))
+		app.shotFilter = (app.shotFilter + 1) % FILTER_COUNT;
 	if ((down & KEY_A) || hit == HIT_SAVE)
 		saveShot();
 	else if ((down & KEY_B) || hit == HIT_BACK)
@@ -288,6 +305,30 @@ static void deleteSelected(void)
 	selChangedAt = osGetTime();
 }
 
+static void openFilterMenu(void)
+{
+	app.filterMenu = true;
+	app.menuSel = app.filter;
+}
+
+static void updateFilterMenu(u32 down)
+{
+	if (down & KEY_RIGHT && app.menuSel < FILTER_COUNT - 1) app.menuSel++;
+	if (down & KEY_LEFT && app.menuSel > 0) app.menuSel--;
+	if (down & KEY_DOWN && app.menuSel + GRID_COLS < FILTER_COUNT) app.menuSel += GRID_COLS;
+	if (down & KEY_UP && app.menuSel - GRID_COLS >= 0) app.menuSel -= GRID_COLS;
+
+	int tile = released && uiMenuTileAt(startX, startY) == uiMenuTileAt(touchX, touchY) ? uiMenuTileAt(touchX, touchY) : -1;
+	if (tile >= 0 || (down & KEY_A))
+	{
+		app.filter = tile >= 0 ? tile : app.menuSel;
+		app.filterMenu = false;
+		topDirty = true;
+	}
+	else if (down & (KEY_B | KEY_Y))
+		app.filterMenu = false;
+}
+
 static void updateHome(u32 down)
 {
 	if (!app.browsing && app.camOk && camPoll())
@@ -295,6 +336,17 @@ static void updateHome(u32 down)
 		app.liveL = camLeft();
 		app.liveR = camRight();
 		topDirty = true;
+	}
+
+	if (app.filterMenu)
+	{
+		updateFilterMenu(down);
+		return;
+	}
+	if (released && uiFilterButtonHit(&app, startX, startY) && uiFilterButtonHit(&app, touchX, touchY))
+	{
+		openFilterMenu();
+		return;
 	}
 
 	if (app.confirmDelete)
@@ -326,6 +378,11 @@ static void updateHome(u32 down)
 		if (down & (KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT))
 		{
 			startBrowsing();
+			return;
+		}
+		if (down & KEY_Y)
+		{
+			openFilterMenu();
 			return;
 		}
 	}
@@ -392,6 +449,9 @@ int main(void)
 	gfxSetDoubleBuffering(GFX_TOP, true);
 	gfxSetDoubleBuffering(GFX_BOTTOM, true);
 
+	osSetSpeedupEnable(true);
+	filterInit();
+	osSetSpeedupEnable(false);
 	storageInit();
 	app.shotL = shotL;
 	app.shotR = shotR;
