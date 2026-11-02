@@ -88,7 +88,7 @@ int main(int argc, char **argv)
 	}
 	app.filter = 4;
 	for (int i = 0; i < app.shotCount; i++)
-		app.gridInfo[i].filter = i % FILTER_COUNT;
+		app.gridInfo[i].style = SHOT_STYLE(i % FILTER_COUNT, 1);
 	render(dir, "home");
 	app.filterMenu = true;
 	app.menuSel = 7;

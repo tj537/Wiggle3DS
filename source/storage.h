@@ -18,8 +18,13 @@
 
 typedef struct
 {
-	s32 pivotX, pivotY, dx, dy, delayMs, filter;
+	s32 pivotX, pivotY, dx, dy, delayMs;
+	s32 style; // filter in bits 0-7, smoothing level in bits 8-9 (file compatible)
 } ShotInfo;
+
+#define SHOT_FILTER(info) ((info)->style & 0xFF)
+#define SHOT_SMOOTH(info) (((info)->style >> 8) & 3)
+#define SHOT_STYLE(filter, smooth) ((filter) | (smooth) << 8)
 
 void storageInit(void);
 // Saved shot numbers, newest first.

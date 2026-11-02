@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "app.h"
+#include "draw.h"
 #include "filter.h"
 #include "gif.h"
 #include "qrcodegen.h"
@@ -54,7 +55,7 @@ static void render(void)
 
 	int delay, ph = -1;
 	if (uiTopWiggles(&app, &delay))
-		ph = (app.now / delay) & 1;
+		ph = (int)(app.now / delay);
 	if (stereo != lastStereo || ph != lastPhase || uiTopAnimating(&app))
 		topDirty = true;
 	if (uiBottomAnimating(&app))
@@ -143,6 +144,7 @@ static void capture(void)
 	app.offset = wiggleMatch(app.pivotX, app.pivotY);
 	app.delayMs = 120;
 	app.shotFilter = app.filter;
+	app.shotSmooth = 1;
 	app.fromGallery = false;
 }
 
@@ -161,7 +163,8 @@ static void openShot(int num)
 	app.pivotY = info.pivotY;
 	app.offset = (Offset){info.dx, info.dy};
 	app.delayMs = info.delayMs;
-	app.shotFilter = info.filter >= 0 && info.filter < FILTER_COUNT ? info.filter : 0;
+	app.shotFilter = SHOT_FILTER(&info) < FILTER_COUNT ? SHOT_FILTER(&info) : 0;
+	app.shotSmooth = SHOT_SMOOTH(&info);
 	app.fromGallery = true;
 }
 
@@ -188,23 +191,38 @@ static void saveShot(void)
 	bool isNew = app.shotNum < 0;
 	if (isNew)
 		app.shotNum = storageNextNumber();
-	ShotInfo info = {app.pivotX, app.pivotY, app.offset.dx, app.offset.dy, app.delayMs, app.shotFilter};
+	ShotInfo info = {app.pivotX, app.pivotY, app.offset.dx, app.offset.dy, app.delayMs, SHOT_STYLE(app.shotFilter, app.shotSmooth)};
 	char path[64];
 	storageGifPath(app.shotNum, path, sizeof(path));
 
-	// The GIF gets the filtered crops; the stored photo stays unfiltered.
+	// The GIF gets the filtered crops and the blended frames in between;
+	// the stored photo stays unfiltered. One buffer per distinct mix.
 	Crop c = wiggleCrop(app.offset);
-	u16 *fl = malloc(c.w * c.h * 2), *fr = malloc(c.w * c.h * 2);
-	bool ok = fl && fr;
+	int pixels = c.w * c.h, mix[MAX_WIGGLE_FRAMES], n = wiggleFrames(app.shotSmooth, mix);
+	u16 *bufs[MAX_WIGGLE_FRAMES] = {0};
+	GifFrame frames[MAX_WIGGLE_FRAMES];
+	bool ok = true;
+	for (int i = 0; i < n && ok; i++)
+	{
+		int same = -1;
+		for (int j = 0; j < i; j++)
+			if (mix[j] == mix[i])
+				same = j;
+		if (same < 0 && !(bufs[i] = malloc(pixels * 2)))
+			ok = false;
+		frames[i] = (GifFrame){same < 0 ? bufs[i] : frames[same].img, c.w, 0, 0};
+	}
 	if (ok)
 	{
-		filterApply(fl, shotL, CAM_W, c.lx, c.ly, c.w, c.h, app.shotFilter);
-		filterApply(fr, shotR, CAM_W, c.rx, c.ry, c.w, c.h, app.shotFilter);
-		GifFrame frames[2] = {{fl, c.w, 0, 0}, {fr, c.w, 0, 0}};
-		ok = storageSave(app.shotNum, shotL, shotR, &info) && gifWrite(path, frames, 2, c.w, c.h, app.delayMs);
+		filterApply(bufs[0], shotL, CAM_W, c.lx, c.ly, c.w, c.h, app.shotFilter);
+		int right = n / 2; // the frame that is all right eye
+		filterApply(bufs[right], shotR, CAM_W, c.rx, c.ry, c.w, c.h, app.shotFilter);
+		for (int i = 1; i < right; i++)
+			blendRows(bufs[i], bufs[0], bufs[right], pixels, mix[i]);
+		ok = storageSave(app.shotNum, shotL, shotR, &info) && gifWrite(path, frames, n, c.w, c.h, app.delayMs);
 	}
-	free(fl);
-	free(fr);
+	for (int i = 0; i < n; i++)
+		free(bufs[i]);
 	if (ok)
 		showToast(false, "Saved · WIG_%04d.gif", app.shotNum);
 	else
@@ -216,7 +234,8 @@ static void saveShot(void)
 
 static void updateReview(u32 down)
 {
-	if (touching && inRect(startX, startY, CARD_X, CARD_Y, CARD_W, CARD_H) && !uiFilterPillHit(startX, startY))
+	if (touching && inRect(startX, startY, CARD_X, CARD_Y, CARD_W, CARD_H) && !uiFilterPillHit(startX, startY) &&
+	    !uiSmoothPillHit(startX, startY))
 	{
 		int tx = touchX < CARD_X ? CARD_X : touchX >= CARD_X + CARD_W ? CARD_X + CARD_W - 1 : touchX;
 		int ty = touchY < CARD_Y ? CARD_Y : touchY >= CARD_Y + CARD_H ? CARD_Y + CARD_H - 1 : touchY;
@@ -248,6 +267,8 @@ static void updateReview(u32 down)
 		app.shotFilter = (app.shotFilter + FILTER_COUNT - 1) % FILTER_COUNT;
 	if ((down & KEY_DOWN) || (released && uiFilterPillHit(startX, startY) && uiFilterPillHit(touchX, touchY)))
 		app.shotFilter = (app.shotFilter + 1) % FILTER_COUNT;
+	if ((down & KEY_X) || (released && uiSmoothPillHit(startX, startY) && uiSmoothPillHit(touchX, touchY)))
+		app.shotSmooth = (app.shotSmooth + 1) % SMOOTH_LEVELS;
 	if ((down & KEY_A) || hit == HIT_SAVE)
 		saveShot();
 	else if ((down & KEY_B) || hit == HIT_BACK)

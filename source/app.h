@@ -75,7 +75,7 @@ typedef struct
 
 	// Review: shotNum is -1 until the shot has been saved once.
 	u16 *shotL, *shotR;
-	int shotNum, pivotX, pivotY, delayMs, shotFilter;
+	int shotNum, pivotX, pivotY, delayMs, shotFilter, shotSmooth;
 	Offset offset;
 	bool saving, fromGallery;
 
@@ -96,7 +96,7 @@ void uiDrawBottom(App *a, u16 *fb);
 // Whether a screen is mid-animation (fade, flash, toast) and needs redrawing.
 bool uiTopAnimating(const App *a);
 bool uiBottomAnimating(const App *a);
-// Whether the top screen shows a wiggle that flips with the delay.
+// Whether the top screen shows a wiggle that changes frame every delay.
 bool uiTopWiggles(const App *a, int *delayMs);
 
 typedef enum { HIT_NONE, HIT_BACK, HIT_SAVE, HIT_CANCEL, HIT_DELETE } Hit;
@@ -106,4 +106,5 @@ int uiCellAt(int x, int y);
 bool uiShareButtonHit(int x, int y);
 bool uiFilterButtonHit(const App *a, int x, int y);
 bool uiFilterPillHit(int x, int y); // review: the filter pill on the photo
+bool uiSmoothPillHit(int x, int y); // review: the smoothing pill on the photo
 int uiMenuTileAt(int x, int y);

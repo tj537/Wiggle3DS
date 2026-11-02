@@ -19,3 +19,12 @@ void wiggleSetImages(const u16 *left, const u16 *right);
 // Block-matches the patch around (px, py) of the left image in the right one.
 Offset wiggleMatch(int px, int py);
 Crop wiggleCrop(Offset o);
+
+// Smoothing levels: 0 cuts hard between the eyes, 1 adds a 50/50 blend
+// between them (L, mix, R, mix), 2 adds two blends (thirds).
+#define SMOOTH_LEVELS 3
+#define MAX_WIGGLE_FRAMES 6
+// Fills `mix` with each loop frame's share of the right eye (0..255);
+// returns the frame count.
+int wiggleFrames(int smooth, int *mix);
+const char *wiggleSmoothName(int smooth);

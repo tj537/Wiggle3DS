@@ -174,8 +174,8 @@ static inline u16 avg4(u16 a, u16 b, u16 c, u16 d)
 	return (((r + 2) >> 2) << 11) | (((g + 2) >> 2) << 5) | ((bl + 2) >> 2);
 }
 
-void drawImage(u16 *fb, int sw, int dx, int dy, int dw, int dh,
-               const u16 *img, int stride, int sx, int sy, int w, int h, const u16 *lut, int radius)
+static void image(u16 *fb, int sw, int dx, int dy, int dw, int dh,
+                  const u16 *img, int stride, int sx, int sy, int w, int h, const u16 *lut, int radius, int alpha)
 {
 	// 16.16 fixed point: sample at 1/4 and 3/4 of each target pixel.
 	u32 stepX = ((u32)w << 16) / dw, stepY = ((u32)h << 16) / dh;
@@ -197,15 +197,31 @@ void drawImage(u16 *fb, int sw, int dx, int dy, int dw, int dh,
 			u16 c = avg4(ra[ax], ra[bx], rb[ax], rb[bx]);
 			if (lut)
 				c = lut[c];
+			int a = alpha;
 			if (edgeX && (y < radius || y >= dh - radius))
-			{
-				int a = (int)(255 * roundRectCov(x, y, 0, 0, dw, dh, radius));
-				col[239 - py] = blend(col[239 - py], c, a);
-			}
-			else
-				col[239 - py] = c;
+				a = (int)(a * roundRectCov(x, y, 0, 0, dw, dh, radius));
+			col[239 - py] = a >= 255 ? c : blend(col[239 - py], c, a);
 		}
 	}
+}
+
+void drawImage(u16 *fb, int sw, int dx, int dy, int dw, int dh,
+               const u16 *img, int stride, int sx, int sy, int w, int h, const u16 *lut, int radius)
+{
+	image(fb, sw, dx, dy, dw, dh, img, stride, sx, sy, w, h, lut, radius, 255);
+}
+
+void drawImageAlpha(u16 *fb, int sw, int dx, int dy, int dw, int dh,
+                    const u16 *img, int stride, int sx, int sy, int w, int h, const u16 *lut, int alpha)
+{
+	if (alpha > 0)
+		image(fb, sw, dx, dy, dw, dh, img, stride, sx, sy, w, h, lut, 0, alpha);
+}
+
+void blendRows(u16 *dst, const u16 *a, const u16 *b, int pixels, int t)
+{
+	for (int i = 0; i < pixels; i++)
+		dst[i] = blend(a[i], b[i], t);
 }
 
 // ---- vignette ----

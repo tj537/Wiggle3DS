@@ -101,3 +101,24 @@ Crop wiggleCrop(Offset o)
 	c.h = CAM_H - abs(o.dy);
 	return c;
 }
+
+int wiggleFrames(int smooth, int *mix)
+{
+	static const int seq[SMOOTH_LEVELS][MAX_WIGGLE_FRAMES] = {
+		{0, 255},
+		{0, 128, 255, 128},
+		{0, 85, 170, 255, 170, 85},
+	};
+	static const int count[SMOOTH_LEVELS] = {2, 4, 6};
+	if (smooth < 0 || smooth >= SMOOTH_LEVELS)
+		smooth = 0;
+	for (int i = 0; i < count[smooth]; i++)
+		mix[i] = seq[smooth][i];
+	return count[smooth];
+}
+
+const char *wiggleSmoothName(int smooth)
+{
+	static const char *names[SMOOTH_LEVELS] = {"Hard cut", "Smooth", "Extra smooth"};
+	return names[smooth >= 0 && smooth < SMOOTH_LEVELS ? smooth : 0];
+}

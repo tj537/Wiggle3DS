@@ -111,7 +111,25 @@ static void drawFiltered(u16 *fb, int sw, int dx, int dy, int dw, int dh,
 		drawVignette(fb, sw, dx, dy, dw, dh, v, radius);
 }
 
-static bool phase(const App *a, int delayMs) { return (a->now / (u64)delayMs) & 1; }
+// One frame of the wiggle loop: the left eye mixed with the right one.
+static void drawWiggle(u16 *fb, int sw, int dx, int dy, int dw, int dh, const u16 *left, const u16 *right, int stride,
+                       int lx, int ly, int rx, int ry, int w, int h, int filter, int mix)
+{
+	const u16 *lut = filterLut(filter);
+	if (mix < 255)
+		drawImage(fb, sw, dx, dy, dw, dh, left, stride, lx, ly, w, h, lut, 0);
+	drawImageAlpha(fb, sw, dx, dy, dw, dh, right, stride, rx, ry, w, h, lut, mix);
+	int v = filterVignette(filter);
+	if (v)
+		drawVignette(fb, sw, dx, dy, dw, dh, v, 0);
+}
+
+// The right eye's share in the current loop frame.
+static int frameMix(const App *a, int smooth, int delayMs)
+{
+	int mix[MAX_WIGGLE_FRAMES], n = wiggleFrames(smooth, mix);
+	return mix[(a->now / (u64)delayMs) % n];
+}
 
 static const ShotInfo *selectedInfo(const App *a)
 {
@@ -159,10 +177,11 @@ static void homeTop(App *a, u16 *fb, int eye, bool stereo)
 	int cur = a->sel % GRID_PAGE;
 	const ShotInfo *info = selectedInfo(a);
 	int delay = shotDelay(info);
-	bool right = stereo ? eye : a->playing && phase(a, delay);
-	int filter = info ? info->filter : 0;
+	int filter = info ? SHOT_FILTER(info) : 0, smooth = info ? SHOT_SMOOTH(info) : 0;
+	int mix = stereo ? (eye ? 255 : 0) : a->playing ? frameMix(a, smooth, delay) : 0;
 	if (a->previewNum == a->shots[a->sel])
-		drawFiltered(fb, 400, 40, 0, PREVIEW_W, PREVIEW_H, right ? a->previewR : a->previewL, PREVIEW_W, 0, 0, PREVIEW_W, PREVIEW_H, filter, 0);
+		drawWiggle(fb, 400, 40, 0, PREVIEW_W, PREVIEW_H, a->previewL, a->previewR, PREVIEW_W, 0, 0, 0, 0,
+		           PREVIEW_W, PREVIEW_H, filter, mix);
 	else if (a->gridOk[cur])
 		drawFiltered(fb, 400, 40, 0, PREVIEW_W, PREVIEW_H, a->grid[cur], THUMB_W, 0, 0, THUMB_W, THUMB_H, filter, 0);
 
@@ -181,12 +200,12 @@ static void reviewTop(App *a, u16 *fb, int eye, bool stereo)
 	Crop c = wiggleCrop(a->offset);
 	int dx, dy, dw, dh;
 	fitTop(c.w, c.h, &dx, &dy, &dw, &dh);
-	bool right = stereo ? eye : phase(a, a->delayMs);
-	drawFiltered(fb, 400, dx, dy, dw, dh, right ? a->shotR : a->shotL, CAM_W,
-	             right ? c.rx : c.lx, right ? c.ry : c.ly, c.w, c.h, a->shotFilter, 0);
+	int mix = stereo ? (eye ? 255 : 0) : frameMix(a, a->shotSmooth, a->delayMs);
+	drawWiggle(fb, 400, dx, dy, dw, dh, a->shotL, a->shotR, CAM_W, c.lx, c.ly, c.rx, c.ry, c.w, c.h, a->shotFilter, mix);
 
 	overlayPillLeft(fb, 400, dx + 8, 8, a->shotNum < 0 ? "New" : tfmt("WIG_%04d", a->shotNum));
-	overlayPill(fb, 400, 200, 212, stereo ? "3D view" : tfmt("%s · %d ms", filterName(a->shotFilter), a->delayMs));
+	overlayPill(fb, 400, 200, 212, stereo ? "3D view" : tfmt("%s · %s · %d ms", filterName(a->shotFilter),
+	                                                          wiggleSmoothName(a->shotSmooth), a->delayMs));
 }
 
 static void shareTop(App *a, u16 *fb);
@@ -316,7 +335,7 @@ static void homeBottom(App *a, u16 *fb)
 			if (a->browsing && i == a->sel % GRID_PAGE)
 				drawRoundRectGrad(fb, 320, x - 3, y - 3, CELL_W + 6, CELL_H + 6, 9, C_ACC0, C_ACC1, 255);
 			if (a->gridOk[i])
-				drawFiltered(fb, 320, x, y, CELL_W, CELL_H, a->grid[i], THUMB_W, 0, 0, THUMB_W, THUMB_H, a->gridInfo[i].filter, 6);
+				drawFiltered(fb, 320, x, y, CELL_W, CELL_H, a->grid[i], THUMB_W, 0, 0, THUMB_W, THUMB_H, SHOT_FILTER(&a->gridInfo[i]), 6);
 			else
 			{
 				drawRoundRect(fb, 320, x, y, CELL_W, CELL_H, 6, C_SURFACE2, 255);
@@ -364,6 +383,10 @@ static void reviewBottom(App *a, u16 *fb)
 	int fw = textWidth(&fontSmall, fl) + 20;
 	drawRoundRect(fb, 320, FILTER_PILL_X, FILTER_PILL_Y, fw, 20, 10, C_BLACK, 150);
 	drawText(fb, 320, &fontSmall, FILTER_PILL_X + 10, FILTER_PILL_Y + (20 - lineH(&fontSmall)) / 2, C_TEXT, 255, fl);
+	const char *sm = wiggleSmoothName(a->shotSmooth);
+	int smw = hintWidth("X", sm) + 16, smx = CARD_X + CARD_W - 8 - smw;
+	drawRoundRect(fb, 320, smx, FILTER_PILL_Y, smw, 20, 10, C_BLACK, 150);
+	drawHint(fb, 320, smx + 8, FILTER_PILL_Y + (20 - lineH(&fontSmall)) / 2, "X", sm, C_TEXT, 255);
 	float px = CARD_X + (a->pivotX + 0.5f) * CARD_W / CAM_W, py = CARD_Y + (a->pivotY + 0.5f) * CARD_H / CAM_H;
 	drawCircle(fb, 320, px, py, 12, C_BLACK, 70);
 	drawRing(fb, 320, px, py, 10, 2, C_TEXT, 240);
@@ -503,7 +526,12 @@ bool uiBottomAnimating(const App *a)
 
 bool uiFilterPillHit(int x, int y)
 {
-	return x >= FILTER_PILL_X - 4 && x < FILTER_PILL_X + 110 && y >= FILTER_PILL_Y - 4 && y < FILTER_PILL_Y + 24;
+	return x >= FILTER_PILL_X - 4 && x < FILTER_PILL_X + 90 && y >= FILTER_PILL_Y - 4 && y < FILTER_PILL_Y + 24;
+}
+
+bool uiSmoothPillHit(int x, int y)
+{
+	return x >= CARD_X + CARD_W - 112 && x < CARD_X + CARD_W && y >= FILTER_PILL_Y - 4 && y < FILTER_PILL_Y + 24;
 }
 
 Hit uiReviewHit(int x, int y)

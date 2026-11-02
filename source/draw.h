@@ -26,6 +26,12 @@ void drawRing(u16 *fb, int sw, float cx, float cy, float r, float thick, u16 col
 void drawImage(u16 *fb, int sw, int dx, int dy, int dw, int dh,
                const u16 *img, int stride, int sx, int sy, int w, int h, const u16 *lut, int radius);
 
+// drawImage blended over what is already there (alpha 0..255, no rounding).
+void drawImageAlpha(u16 *fb, int sw, int dx, int dy, int dw, int dh,
+                    const u16 *img, int stride, int sx, int sy, int w, int h, const u16 *lut, int alpha);
+// dst = a mixed with b by t (0..255), for row-major images.
+void blendRows(u16 *dst, const u16 *a, const u16 *b, int pixels, int t);
+
 // Darkens the corners of a w*h region: on screen at (x, y) (clipped to
 // rounded corners of `radius`), or of a row-major image. Strength 0..255.
 void drawVignette(u16 *fb, int sw, int x, int y, int w, int h, int strength, int radius);
