@@ -166,6 +166,21 @@ void drawRing(u16 *fb, int sw, float cx, float cy, float r, float thick, u16 col
 	circle(fb, sw, cx, cy, r, r - thick, color, color, alpha);
 }
 
+void drawCrescent(u16 *fb, int sw, float cx, float cy, float r, float bx, float by, float br, u16 color, int alpha)
+{
+	int x0 = (int)floorf(cx - r - 1), x1 = (int)ceilf(cx + r + 1);
+	int y0 = (int)floorf(cy - r - 1), y1 = (int)ceilf(cy + r + 1);
+	for (int px = x0; px <= x1; px++)
+		for (int py = y0; py <= y1; py++)
+		{
+			float dx = px + 0.5f - cx, dy = py + 0.5f - cy, ex = px + 0.5f - bx, ey = py + 0.5f - by;
+			float in = r - sqrtf(dx * dx + dy * dy) + 0.5f, out = sqrtf(ex * ex + ey * ey) - br + 0.5f;
+			in = in < 0 ? 0 : in > 1 ? 1 : in;
+			out = out < 0 ? 0 : out > 1 ? 1 : out;
+			plot(fb, sw, px, py, color, (int)(alpha * in * out));
+		}
+}
+
 static inline u16 avg4(u16 a, u16 b, u16 c, u16 d)
 {
 	int r = (a >> 11) + (b >> 11) + (c >> 11) + (d >> 11);
@@ -248,6 +263,17 @@ static inline int vignetteAlpha(float t, int strength)
 	return (int)(strength * k * k * (3 - 2 * k));
 }
 
+// Darkens a pixel by a/255 with ordered dithering: plain rounding to the
+// 5/6-bit channels would show the falloff as rings.
+static const u8 bayer4[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
+
+static inline u16 darken(u16 p, int a, int x, int y)
+{
+	int k = 256 - a - (a >> 7), t = bayer4[(y & 3) * 4 + (x & 3)] * 16 + 8;
+	int r = ((p >> 11) * k + t) >> 8, g = (((p >> 5) & 63) * k + t) >> 8, b = ((p & 31) * k + t) >> 8;
+	return r << 11 | g << 5 | b;
+}
+
 static inline float axis(int i, int n)
 {
 	float d = (i + 0.5f - n / 2.0f) / (n / 2.0f);
@@ -273,7 +299,7 @@ void drawVignette(u16 *fb, int sw, int x, int y, int w, int h, int strength, int
 			if (a)
 			{
 				u16 *p = &PIX(fb, fx, fy);
-				*p = blend(*p, 0, a);
+				*p = darken(*p, a, fx, fy);
 			}
 		}
 	}
@@ -288,7 +314,7 @@ void vignetteRows(u16 *img, int w, int h, int strength)
 		{
 			int a = vignetteAlpha(axis(px, w) + ay, strength);
 			if (a)
-				img[py * w + px] = blend(img[py * w + px], 0, a);
+				img[py * w + px] = darken(img[py * w + px], a, px, py);
 		}
 	}
 }

@@ -20,7 +20,7 @@ static Handle events[4];
 // guards all camera calls and `running`.
 static Thread thread;
 static LightLock lock;
-static volatile bool running, quit, frameReady;
+static volatile bool running, quit, fresh[2]; // fresh: a new frame per eye since the last poll
 // Set while the UI thread wants the lock; the camera thread runs at a higher
 // priority and would otherwise grab it right back.
 static volatile bool uiWaiting;
@@ -41,20 +41,24 @@ static void arm(int eye)
 		                  FRAME_BYTES, (s16)transferUnit);
 }
 
+static volatile bool selfie; // the inner camera on CAM1 only
+
 static void serviceCamera(void)
 {
 	arm(0);
-	arm(1);
+	if (!selfie)
+		arm(1);
 	s32 index = -1;
+	int count = selfie ? 3 : 4; // without CAM2's receive event
 	// A timeout result isn't negative, so R_FAILED doesn't catch it; only an
 	// exact success means an event fired.
-	if (svcWaitSynchronizationN(&index, events, 4, false, WAIT_NS) != 0 || index < 0 || index > 3)
+	if (svcWaitSynchronizationN(&index, events, count, false, WAIT_NS) != 0 || index < 0 || index >= count)
 		return;
 	if (index < 2)
 	{
 		// Buffer error: drop that eye's transfer and restart capture.
 		closeEvent(index + 2);
-		CAMU_StartCapture(PORT_BOTH);
+		CAMU_StartCapture(selfie ? PORT_CAM1 : PORT_BOTH);
 		return;
 	}
 	int eye = index - 2;
@@ -64,7 +68,7 @@ static void serviceCamera(void)
 	writing[eye] = 3 - ready[eye] - shown[eye]; // the buffer that is neither
 	LightLock_Unlock(&swapLock);
 	arm(eye);
-	frameReady = true;
+	fresh[eye] = true;
 }
 
 static void cameraThread(void *arg)
@@ -95,26 +99,85 @@ static void lockFromUi(void)
 }
 
 static int fpsSetting = 20;
+static bool night;
 
 static CAMU_FrameRate frameRate(void)
 {
+	if (night)
+		return FRAME_RATE_15_TO_5; // lets auto exposure go longer
 	return fpsSetting <= 15 ? FRAME_RATE_15 : fpsSetting >= 30 ? FRAME_RATE_30 : FRAME_RATE_20;
+}
+
+static u32 cameras(void) { return selfie ? SELECT_IN1 : SELECT_OUT1_OUT2; }
+static u32 port(void) { return selfie ? PORT_CAM1 : PORT_BOTH; }
+
+// Everything on auto; night mode trades frame rate for exposure time.
+static void configure(void)
+{
+	CAMU_SetFrameRate(SELECT_ALL, frameRate());
+	CAMU_SetPhotoMode(SELECT_ALL, night ? PHOTO_MODE_NIGHTVIEW : PHOTO_MODE_NORMAL);
+	CAMU_SetAutoExposure(SELECT_ALL, true);
+	CAMU_SetAutoWhiteBalance(SELECT_ALL, true);
+}
+
+// Starts the selected cameras; the lock is held.
+static void start(void)
+{
+	CAMU_Activate(cameras());
+	CAMU_ClearBuffer(PORT_BOTH);
+	if (!selfie)
+		CAMU_SynchronizeVsyncTiming(SELECT_OUT1, SELECT_OUT2);
+	fresh[0] = fresh[1] = false;
+	CAMU_StartCapture(port());
+}
+
+static void stop(void)
+{
+	CAMU_StopCapture(PORT_BOTH);
+	closeEvent(2);
+	closeEvent(3);
+}
+
+static void reconfigure(void)
+{
+	lockFromUi();
+	if (running)
+	{
+		stop();
+		configure();
+		start();
+	}
+	else
+		configure();
+	LightLock_Unlock(&lock);
+}
+
+void camSetSelfie(bool on)
+{
+	lockFromUi();
+	if (on != selfie)
+	{
+		if (running)
+			stop();
+		selfie = on;
+		if (running)
+			start();
+	}
+	LightLock_Unlock(&lock);
 }
 
 void camSetFps(int fps)
 {
-	lockFromUi();
 	fpsSetting = fps;
-	if (running)
-	{
-		CAMU_StopCapture(PORT_BOTH);
-		CAMU_SetFrameRate(SELECT_OUT1_OUT2, frameRate());
-		CAMU_ClearBuffer(PORT_BOTH);
-		CAMU_StartCapture(PORT_BOTH);
-	}
-	else
-		CAMU_SetFrameRate(SELECT_OUT1_OUT2, frameRate());
-	LightLock_Unlock(&lock);
+	if (thread)
+		reconfigure();
+}
+
+void camSetNight(bool on)
+{
+	night = on;
+	if (thread)
+		reconfigure();
 }
 
 bool camOpen(void)
@@ -125,12 +188,15 @@ bool camOpen(void)
 	if (R_FAILED(camInit()))
 		return false;
 
-	CAMU_SetSize(SELECT_OUT1_OUT2, SIZE_VGA, CONTEXT_A);
-	CAMU_SetOutputFormat(SELECT_OUT1_OUT2, OUTPUT_RGB_565, CONTEXT_A);
-	CAMU_SetFrameRate(SELECT_OUT1_OUT2, frameRate());
-	CAMU_SetNoiseFilter(SELECT_OUT1_OUT2, true);
-	CAMU_SetAutoExposure(SELECT_OUT1_OUT2, true);
-	CAMU_SetAutoWhiteBalance(SELECT_OUT1_OUT2, true);
+	CAMU_SetSize(SELECT_ALL, SIZE_VGA, CONTEXT_A);
+	CAMU_SetOutputFormat(SELECT_ALL, OUTPUT_RGB_565, CONTEXT_A);
+	CAMU_SetNoiseFilter(SELECT_ALL, true);
+	CAMU_SetLensCorrection(SELECT_ALL, LENS_CORRECTION_NORMAL); // evens out the corners
+	CAMU_SetContrast(SELECT_ALL, CONTRAST_NORMAL);
+	CAMU_FlipImage(SELECT_IN1, FLIP_HORIZONTAL, CONTEXT_A); // selfies like a mirror
+	// Both sensors start each frame together, so the eyes see the same moment.
+	CAMU_SynchronizeVsyncTiming(SELECT_OUT1, SELECT_OUT2);
+	configure();
 	CAMU_SetTrimming(PORT_CAM1, false);
 	CAMU_SetTrimming(PORT_CAM2, false);
 
@@ -154,10 +220,7 @@ void camResume(void)
 	lockFromUi();
 	if (!running)
 	{
-		CAMU_Activate(SELECT_OUT1_OUT2);
-		CAMU_ClearBuffer(PORT_BOTH);
-		CAMU_SynchronizeVsyncTiming(SELECT_OUT1, SELECT_OUT2);
-		CAMU_StartCapture(PORT_BOTH);
+		start();
 		running = true;
 	}
 	LightLock_Unlock(&lock);
@@ -168,9 +231,7 @@ void camPause(void)
 	lockFromUi();
 	if (running)
 	{
-		CAMU_StopCapture(PORT_BOTH);
-		closeEvent(2);
-		closeEvent(3);
+		stop();
 		CAMU_Activate(SELECT_NONE);
 		running = false;
 	}
@@ -199,10 +260,11 @@ void camClose(void)
 
 bool camPoll(void)
 {
-	if (!frameReady)
+	// Only whole pairs: both eyes from the same synced frame.
+	if (!fresh[0] || (!selfie && !fresh[1]))
 		return false;
-	frameReady = false;
 	LightLock_Lock(&swapLock);
+	fresh[0] = fresh[1] = false;
 	shown[0] = ready[0];
 	shown[1] = ready[1];
 	LightLock_Unlock(&swapLock);
@@ -210,4 +272,4 @@ bool camPoll(void)
 }
 
 const u16 *camLeft(void) { return bufs[0][shown[0]]; }
-const u16 *camRight(void) { return bufs[1][shown[1]]; }
+const u16 *camRight(void) { return selfie ? bufs[0][shown[0]] : bufs[1][shown[1]]; }

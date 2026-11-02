@@ -5,7 +5,7 @@
 BasicInfo:
   Title                   : $(APP_TITLE)
   ProductCode             : $(APP_PRODUCT_CODE)
-  Logo                    : Homebrew
+  Logo                    : None
 
 TitleInfo:
   Category                : Application

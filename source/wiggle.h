@@ -23,6 +23,8 @@ Crop wiggleCrop(Offset o);
 // Smoothing levels: 0 cuts hard between the eyes, 1 adds a 50/50 blend
 // between them (L, mix, R, mix), 2 adds two blends (thirds).
 #define SMOOTH_LEVELS 3
+// Transition step after the smoothing levels: no wiggle, a plain photo.
+#define SMOOTH_OFF SMOOTH_LEVELS
 #define MAX_WIGGLE_FRAMES 6
 // Fills `mix` with each loop frame's share of the right eye (0..255);
 // returns the frame count.

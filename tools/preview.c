@@ -57,6 +57,9 @@ static void render(const char *dir, const char *name)
 	writeBmp(path);
 }
 
+// Export runs on the 3DS only; pretend one GIF is still being made.
+bool exportIsPending(int num) { return num == 30; }
+
 int main(int argc, char **argv)
 {
 	FILE *f = fopen(argv[1], "rb");
@@ -65,7 +68,10 @@ int main(int argc, char **argv)
 	const char *dir = argv[2];
 	filterInit();
 	uiSetTheme(0);
-	app.settings = (Settings){0, 0, 120, false, 20, true};
+	app.settings = (Settings){.filter = 4, .delayMs = 120, .fps = 20, .flash = true, .smooth = 1};
+	app.freeBytes = 3ULL << 30;
+	app.battery = 76;
+	app.charging = true;
 
 	app.now = 100000;
 	app.camOk = true;
@@ -80,31 +86,65 @@ int main(int argc, char **argv)
 	render(dir, "home_empty");
 
 	// Home with shots: live, then browsing a selection.
-	app.shotCount = 7;
-	for (int i = 0; i < app.shotCount; i++)
+	app.shotCount = 30;
+	app.exporting = 1;
+	app.scrollX = 40;
+	for (int i = 0; i < THUMB_CACHE; i++)
 	{
-		app.shots[i] = 7 - i;
+		app.shots[i] = 30 - i;
+		app.gridIdx[i] = i;
 		app.gridOk[i] = i != 5;
 		app.gridInfo[i] = (ShotInfo){0, 0, 12, 2, 120, 0};
-		downscale(app.grid[i], THUMB_W, THUMB_H, pair[0], i * 20, i * 10, CAM_W - 140, CAM_H - 70);
+		downscale(app.grid[i], THUMB_W, THUMB_H, pair[0], i % 7 * 20, i % 7 * 10, CAM_W - 140, CAM_H - 70);
 	}
-	app.filter = 4;
-	for (int i = 0; i < app.shotCount; i++)
+	for (int i = 0; i < THUMB_CACHE; i++)
 		app.gridInfo[i].style = SHOT_STYLE(i % FILTER_COUNT, 1);
+	app.settings.night = true;
+	app.settings.smooth = SMOOTH_OFF;
+	app.stacking = 2;
+	app.stackFrames = 4;
 	render(dir, "home");
+	app.stacking = 0;
+	app.settings.night = false;
+	app.settings.smooth = 1;
+	render(dir, "home_wiggle");
 	app.filterMenu = true;
-	app.menuSel = 7;
+	app.menuSel = 45;
+	app.menuScroll = 0;
+	uiMenuReveal(&app);
 	render(dir, "filter_menu");
+	for (int f = 11; f < FILTER_COUNT; f++)
+	{
+		app.menuSel = f;
+		char name[32];
+		snprintf(name, sizeof(name), "f%02d", f);
+		render(dir, name);
+	}
+	app.menuScroll = 0;
 	app.filterMenu = false;
-	app.browsing = true;
-	app.sel = 1;
+	app.mode = MODE_GALLERY;
+	app.playing = true;
+	app.sel = 4;
 	downscale(app.previewL, PREVIEW_W, PREVIEW_H, pair[0], 0, 0, CAM_W, CAM_H);
 	downscale(app.previewR, PREVIEW_W, PREVIEW_H, pair[1], 0, 0, CAM_W, CAM_H);
 	app.previewNum = app.shots[1];
 	render(dir, "home_browse");
+	strcpy(app.selDate, "Yesterday");
+	render(dir, "home_browse");
+	app.picking = true;
+	app.picked[4] = app.picked[6] = true;
+	app.pickedCount = 2;
+	render(dir, "gallery_pick");
 	app.confirmDelete = true;
 	render(dir, "home_delete");
 	app.confirmDelete = false;
+	app.picking = false;
+	app.toastAt = app.now - 600;
+	app.toastUndo = true;
+	strcpy(app.toast, "2 shots deleted");
+	render(dir, "gallery_undo");
+	app.toast[0] = 0;
+	app.toastUndo = false;
 
 	// Review, with a toast and while saving.
 	app.mode = MODE_REVIEW;
@@ -114,7 +154,12 @@ int main(int argc, char **argv)
 	app.offset = (Offset){12, 2};
 	app.delayMs = 120;
 	app.shotFilter = 7;
+	render(dir, "review_tip");
+	app.settings.tipDone = true;
 	render(dir, "review");
+	app.shotSmooth = SMOOTH_OFF;
+	render(dir, "review_photo");
+	app.shotSmooth = 0;
 	app.toastAt = app.now - 600;
 	strcpy(app.toast, "Saved · WIG_0003.gif");
 	app.shotNum = 3;
@@ -128,6 +173,10 @@ int main(int argc, char **argv)
 	app.mode = MODE_SETTINGS;
 	app.settingsSel = 0;
 	render(dir, "settings");
+	app.settingsTop = SET_COUNT - SET_VISIBLE;
+	app.settingsSel = SET_COUNT - 1;
+	render(dir, "settings_end");
+	app.lowBattery = true;
 	uiSetTheme(2);
 	app.settings.theme = 2;
 	app.mode = MODE_HOME;

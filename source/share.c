@@ -103,8 +103,9 @@ static int listGifs(int *nums, int max)
 	{
 		int num;
 		char ext[8];
-		if (sscanf(e->d_name, "WIG_%d.%7s", &num, ext) == 2 && !strcmp(ext, "gif"))
-			nums[count++] = num;
+		// num * 2, + 1 for a photo; sorted that way, newest comes first.
+		if (sscanf(e->d_name, "WIG_%d.%7s", &num, ext) == 2 && (!strcmp(ext, "gif") || !strcmp(ext, "jpg")))
+			nums[count++] = num * 2 + (ext[0] == 'j');
 	}
 	closedir(dir);
 	qsort(nums, count, sizeof(int), cmpDesc);
@@ -126,7 +127,7 @@ static const char pageHead[] = // printf format: colors below
 	"a{color:#fff;background:linear-gradient(90deg,#%06lx,#%06lx);padding:5px 12px;border-radius:99px;text-decoration:none;font-weight:600}"
 	".empty{padding:32px 16px;color:#%06lx}"
 	"</style></head><body><header><h1>Wiggle3DS</h1>"
-	"<p>Press and hold a GIF, then choose \xe2\x80\x9cSave to Photos\xe2\x80\x9d.</p></header>";
+	"<p>Press and hold a picture, then choose \xe2\x80\x9cSave to Photos\xe2\x80\x9d.</p></header>";
 
 static unsigned long colBg = 0x140b24, colCard = 0x241a3a, colDim = 0xa094be, colAcc0 = 0x7c4dff, colAcc1 = 0xd66eff;
 
@@ -150,23 +151,30 @@ static void sendPage(int fd)
 	// Order of the colors in pageHead.
 	size_t len = snprintf(body, cap, pageHead, colBg, colAcc0, colAcc1, colDim, colCard, colDim, colAcc0, colAcc1, colDim);
 	if (!count)
-		len += snprintf(body + len, cap - len, "<div class=\"empty\">No GIFs yet. Save one in Wiggle3DS first.</div>");
+		len += snprintf(body + len, cap - len, "<div class=\"empty\">Nothing here yet. Take a shot in Wiggle3DS first.</div>");
 	else
 		len += snprintf(body + len, cap - len, "<div class=\"grid\">");
 	for (int i = 0; i < count; i++)
+	{
+		int num = nums[i] / 2;
+		const char *ext = nums[i] & 1 ? "jpg" : "gif";
 		len += snprintf(body + len, cap - len,
-		                "<figure><img src=\"/gif/WIG_%04d.gif\" loading=\"lazy\" alt=\"WIG_%04d\">"
-		                "<figcaption>WIG_%04d<a href=\"/gif/WIG_%04d.gif?download\" download>Save</a></figcaption></figure>",
-		                nums[i], nums[i], nums[i], nums[i]);
+		                "<figure><img src=\"/gif/WIG_%04d.%s\" loading=\"lazy\" alt=\"WIG_%04d\">"
+		                "<figcaption>WIG_%04d<a href=\"/gif/WIG_%04d.%s?download\" download>Save</a></figcaption></figure>",
+		                num, ext, num, num, num, ext);
+	}
 	snprintf(body + len, cap - len, "%s</body></html>", count ? "</div>" : "");
 	sendText(fd, "200 OK", "text/html; charset=utf-8", body);
 	free(body);
 }
 
-static bool sendGif(int fd, int num, bool download)
+static bool sendFile(int fd, int num, bool jpg, bool download)
 {
 	char path[64];
-	storageGifPath(num, path, sizeof(path));
+	if (jpg)
+		storagePhotoPath(num, path, sizeof(path));
+	else
+		storageGifPath(num, path, sizeof(path));
 	FILE *f = fopen(path, "rb");
 	if (!f)
 	{
@@ -179,10 +187,11 @@ static bool sendGif(int fd, int num, bool download)
 
 	char disposition[80] = "";
 	if (download)
-		snprintf(disposition, sizeof(disposition), "Content-Disposition: attachment; filename=\"WIG_%04d.gif\"\r\n", num);
+		snprintf(disposition, sizeof(disposition), "Content-Disposition: attachment; filename=\"WIG_%04d.%s\"\r\n", num,
+		         jpg ? "jpg" : "gif");
 	char head[256];
-	int n = snprintf(head, sizeof(head), "HTTP/1.0 200 OK\r\nContent-Type: image/gif\r\nContent-Length: %ld\r\n%s"
-	                 "Cache-Control: no-cache\r\nConnection: close\r\n\r\n", size, disposition);
+	int n = snprintf(head, sizeof(head), "HTTP/1.0 200 OK\r\nContent-Type: image/%s\r\nContent-Length: %ld\r\n%s"
+	                 "Cache-Control: no-cache\r\nConnection: close\r\n\r\n", jpg ? "jpeg" : "gif", size, disposition);
 	bool ok = sendAll(fd, head, n);
 	static char chunk[32 * 1024];
 	size_t got;
@@ -216,11 +225,12 @@ bool sharePoll(void)
 
 	bool sent = false;
 	int num;
-	char rest[16] = "";
+	char ext[4] = "", rest[16] = "";
 	if (!strncmp(req, "GET / ", 6) || !strncmp(req, "GET /index.html ", 16))
 		sendPage(client);
-	else if (sscanf(req, "GET /gif/WIG_%d.gif%15s", &num, rest) >= 1 && num > 0)
-		sent = sendGif(client, num, !strncmp(rest, "?download", 9));
+	else if (sscanf(req, "GET /gif/WIG_%d.%3[a-z]%15s", &num, ext, rest) >= 2 && num > 0 &&
+	         (!strcmp(ext, "gif") || !strcmp(ext, "jpg")))
+		sent = sendFile(client, num, ext[0] == 'j', !strncmp(rest, "?download", 9));
 	else
 		sendText(client, "404 Not Found", "text/plain", "Not found");
 

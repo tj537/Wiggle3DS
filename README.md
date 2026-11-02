@@ -1,33 +1,72 @@
 # Wiggle3DS
 
-Homebrew-App für den New 3DS (XL): Sie nimmt ein 3D-Foto mit beiden Außenkameras auf und macht daraus ein Wigglegram-GIF, eine kleine Kamerafahrt wie bei den Nimslo- und Nishika-Kameras mit mehreren Linsen.
+Retro-Foto- und Wiggle-Workstation für den New 3DS (XL). Sie nimmt mit beiden Außenkameras ein 3D-Foto auf und macht daraus ein Wigglegram-GIF, eine kleine Kamerafahrt wie bei den Nimslo- und Nishika-Kameras mit mehreren Linsen. Dazu kommen normale Fotos, Selfies, ein Nachtmodus und 50 Filter von Classic bis Datamosh.
 
-## Plan
+## Was sie kann
 
-1. 2-Bild-Wiggle: Den Drehpunkt per Touch wählen, dann als GIF auf die SD-Karte exportieren.
-2. Zwischenbilder aus einer Tiefenschätzung berechnen, damit die Kamerafahrt flüssig wird.
-3. Icon, Banner und CIA für das HOME-Menü.
-
-Aktueller Stand: Schritt 1 ist fertig. Die App nimmt in 640x480 auf, jedes GIF bekommt eine eigene Palette, die aus seinen Farben berechnet wird, und auf dem Startscreen ist die Galerie.
+- **Wigglegrams:** Beide Außenkameras lösen gleichzeitig aus, du tippst auf dein Motiv, und die App macht ein wackelndes GIF, das sich um diesen Punkt dreht. Übergänge: Hard cut, Smooth, Extra smooth.
+- **Normale Fotos:** Steht die Transition auf **Off**, wird die Aufnahme ein normales Foto (JPG). Beide Kamerabilder bleiben gespeichert, beim Bearbeiten machst du aus einem Foto jederzeit wieder ein Wiggle und umgekehrt.
+- **50 Filter in Gruppen:** Classic, Color, RGB & Ghost, Tape & Screen, Data Mosh, Bits & Pixels. Die Glitch-Filter verändern das Bild selbst (RGB Split, VHS, Datamosh, Pixel Sort, Melt, Keyframe …), viele davon bewegen sich, im Sucher genauso wie im GIF.
+- **Nachtmodus:** längere Belichtung, und vier Bilder werden zu einem gemittelt, das rauscht deutlich weniger. Bewegte Stellen bleiben vom ersten Bild, so gibt es keine Geisterbilder.
+- **Selfie:** die Innenkamera, gespiegelt, für normale Fotos.
+- **Sauberes 3D:** Beide Sensoren sind synchronisiert, Helligkeit und Farbe des rechten Auges werden ans linke angeglichen, damit das GIF nicht flackert.
+- **Galerie:** drei Reihen, die seitwärts scrollen, Mehrfachauswahl per Gedrückthalten, Löschen mit Rückgängig.
+- **Aufs Handy:** QR-Code scannen, dann lädst du GIFs und Fotos im WLAN direkt aufs Handy.
+- **Schnell:** GIFs und JPGs entstehen im Hintergrund, die Kamera ist sofort wieder bereit.
 
 ## Bedienung
 
 Die App ist auf Englisch.
 
-- **Startscreen:** Oben läuft die Kamera, unten ist immer die Galerie. A, L oder R macht ein Foto.
-- **Filter:** Der Filter-Button oben in der Galerie (oder Y) öffnet die Filterauswahl. Antippen oder das Steuerkreuz zeigt den Filter sofort als Vorschau im Sucher, A oder ein zweites Antippen übernimmt ihn, B bricht ab. Der Filter wirkt live im Sucher und gilt für neue Fotos. Zur Auswahl stehen Original, Vivid, Warm, Cool, Dream, Cinema, Vintage, Lomo, Sepia, Mono und Noir.
-- **Durchblättern:** Mit dem Steuerkreuz oder durch Antippen eines Bildes wählst du eine Aufnahme. Sie erscheint oben als Standbild, Y spielt sie ab. A oder ein zweites Antippen öffnet sie zum Bearbeiten, X löscht sie nach einer Rückfrage, B bringt dich zurück zur Kamera.
-- **Bearbeiten:** Tipp auf dein Motiv, um den Drehpunkt zu setzen, mit L/R justierst du fein. Das Tempo stellst du mit ◀/▶ oder dem Regler ein, den Filter mit ▲/▼ oder durch Antippen der Filteranzeige auf dem Foto. X (oder Antippen) schaltet die Übergänge um: "Hard cut" springt hart zwischen den Augen hin und her (2 Frames), "Smooth" blendet dazwischen über (4 Frames, wie bei 3ds-mpo-gif), "Extra smooth" nutzt zwei Zwischenstufen (6 Frames). Standard ist Hard cut, das lässt sich in den Einstellungen ändern. Mehr Frames machen das GIF größer. A speichert das GIF mit Filter, B geht zurück. Das Originalfoto bleibt ungefiltert gespeichert, du kannst den Filter also jederzeit ändern.
-- **3D-Regler:** Oben siehst du die Aufnahme dann in echtem 3D.
-- **Einstellungen (Zahnrad oben):** Hier wählst du das Farbschema (Purple, Neon, Ocean, Mint, Sunset, Mono), den Standard-Übergang und das Standard-Tempo für neue Fotos, die GIF-Größe (voll oder halb für Messenger), die Bildrate des Suchers (15/20/30 fps, weniger spart Akku) und den Blitz-Effekt beim Auslösen. Die Einstellungen landen in `Wiggle3DS/settings.txt`.
-- **Aufs Handy (SELECT oder "Share" oben rechts):** Oben erscheint ein QR-Code. Scannst du ihn mit der Handy-Kamera (Handy im selben WLAN), öffnet sich eine Seite mit allen GIFs. Dort hältst du ein GIF gedrückt und wählst "Zu Fotos hinzufügen", oder du tippst auf "Save". Der kleine Webserver (Port 8080) läuft nur, solange dieser Screen offen ist.
+### Startscreen
 
-Akku: Die App zeichnet nur neu, wenn sich etwas ändert. Die Kamera läuft mit 20 fps und ist beim Durchblättern aus, und den schnelleren Takt des New 3DS nutzt die App nur beim Bearbeiten und Speichern.
+Oben läuft der Sucher, unten sind deine Standards und die letzten Bilder.
+
+- **A, L, R, ZL oder ZR:** auslösen
+- **Y:** Filterauswahl. Antippen zeigt den Filter sofort im Sucher, nochmal Antippen oder A übernimmt ihn.
+- **X:** Nachtmodus an oder aus
+- **B oder „All“:** Galerie
+- **SELECT:** aufs Handy teilen
+- **START:** beenden
+
+Die Buttons oben, von links: Selfie, Nachtmodus, Share, Einstellungen. Die LED links zeigt den Akku: grün, orange oder rot, mit Ring beim Laden.
+
+Die Kacheln darunter sind die Standards für neue Aufnahmen: Filter, Transition (Off heißt Foto), Speed und Quick capture. Mit Quick capture wird jede Aufnahme sofort gespeichert, ohne vorher den Bearbeiten-Screen zu öffnen.
+
+### Bearbeiten
+
+- **Tippen aufs Motiv:** setzt den Drehpunkt, beim ersten Mal erklärt ein Hinweis das.
+- **◀ ▶ oder der Regler:** Speed
+- **▲ ▼:** Filter
+- **X:** Transition, auch auf Off, dann wird es ein Foto
+- **Y halten:** zeigt das Original ohne Filter
+- **A:** speichern, **B:** zurück
+
+Das Original bleibt immer ungefiltert gespeichert, du kannst also alles später ändern.
+
+### Galerie
+
+- **Wischen:** scrollt mit Schwung
+- **Steuerkreuz:** wählt ein Bild, **L R:** springt 4 Spalten
+- **Antippen:** wählt ein Bild, **nochmal Antippen oder A:** öffnet es
+- **Y:** abspielen oder pausieren
+- **X:** löschen, danach ein paar Sekunden lang **Y** für Rückgängig
+- **Bild gedrückt halten:** startet die Mehrfachauswahl, dann tippst du weitere an und löschst sie mit X
+
+### Einstellungen
+
+Farbschema, Selbstauslöser, Gitterlinien, Auslöseton, Blitz-Effekt, Sucher-fps, welche Kamera für Fotos (Standard rechts), Galerie-Autoplay, GIF-Größe (voll oder halb) und GIF-Form (4:3 oder 1:1). Oben stehen die Version, die Anzahl der Aufnahmen und der freie Speicher. Alles landet in `Wiggle3DS/settings.txt`.
+
+### Aufs Handy
+
+SELECT oder Share zeigt oben einen QR-Code. Scannst du ihn mit dem Handy im selben WLAN, öffnet sich eine Seite mit allen GIFs und Fotos. Dort hältst du ein Bild gedrückt und wählst „Zu Fotos hinzufügen“, oder du tippst auf „Save“. Der Webserver (Port 8080) läuft nur, solange dieser Screen offen ist.
 
 ## Dateien auf der SD-Karte
 
-- `Wiggle3DS/GIF/WIG_0001.gif`: die fertigen Wigglegrams
-- `Wiggle3DS/Photos/WIG_0001.w3d`: das 3D-Foto mit seinen Einstellungen, damit du es später in der Galerie neu bearbeiten kannst
+- `Wiggle3DS/GIF/WIG_0001.gif`: ein fertiges Wigglegram, es läuft endlos
+- `Wiggle3DS/GIF/WIG_0001.jpg`: ein Foto (Transition Off)
+- `Wiggle3DS/Photos/WIG_0001.w3d`: beide Kamerabilder mit allen Einstellungen, für die Galerie und zum neu Bearbeiten
+- `Wiggle3DS/settings.txt`: die Einstellungen
 
 ## Bauen
 
@@ -40,7 +79,7 @@ make
 
 Wichtig: Im Pfad zum Projektordner dürfen keine Leerzeichen sein, sonst bricht `make` ab.
 
-## Auf den 3DS schicken
+## Zum Testen über den Homebrew Launcher
 
 Öffne auf dem 3DS den Homebrew Launcher und drück **Y**. Dann am Mac:
 
@@ -48,7 +87,7 @@ Wichtig: Im Pfad zum Projektordner dürfen keine Leerzeichen sein, sonst bricht 
 /opt/devkitpro/tools/bin/3dslink Wiggle3DS.3dsx
 ```
 
-Falls der 3DS nicht automatisch gefunden wird, häng die angezeigte IP-Adresse mit `-a <IP>` an.
+Falls der 3DS nicht automatisch gefunden wird, häng die angezeigte IP-Adresse mit `-a <IP>` an. Für den Alltag ist die CIA unten besser.
 
 ## Als CIA ins HOME-Menü
 
@@ -108,6 +147,6 @@ Kopier `Wiggle3DS.cia` auf die SD-Karte, zum Beispiel nach `cias/`. In FBI öffn
 - `tools/preview.c` rendert alle Screens am Mac als BMP, damit du die Oberfläche ohne 3DS prüfen kannst (Eingabe: ein rohes RGB565-Stereopaar mit 640x480):
 
   ```bash
-  clang -O2 -I/opt/devkitpro/libctru/include -o preview tools/preview.c source/ui.c source/draw.c source/font_data.c source/wiggle.c source/qrcodegen.c source/filter.c -lm
+  clang -O2 -I/opt/devkitpro/libctru/include -o preview tools/preview.c source/ui.c source/draw.c source/font_data.c source/filter.c source/qrcodegen.c source/wiggle.c -lm
   ./preview paar.raw ausgabe/
   ```

@@ -1,3 +1,4 @@
+#include <3ds.h>
 #include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,12 +30,39 @@ void storageGifPath(int num, char *buf, size_t size)
 	snprintf(buf, size, DIR_GIF "/WIG_%04d.gif", num);
 }
 
+void storagePhotoPath(int num, char *buf, size_t size)
+{
+	snprintf(buf, size, DIR_GIF "/WIG_%04d.jpg", num);
+}
+
 void storageInit(void)
 {
 	mkdir(DIR_ROOT, 0777);
 	rename(DIR_PHOTO_OLD, DIR_PHOTO); // fails harmlessly if there is nothing to move
 	mkdir(DIR_GIF, 0777);
 	mkdir(DIR_PHOTO, 0777);
+}
+
+void storagePurgeAll(void)
+{
+	static const char *const dirs[2] = {DIR_PHOTO, DIR_GIF};
+	for (int i = 0; i < 2; i++)
+	{
+		DIR *dir = opendir(dirs[i]);
+		struct dirent *e;
+		char path[300];
+		while (dir && (e = readdir(dir)))
+		{
+			size_t n = strlen(e->d_name);
+			if (n > 4 && !strcmp(e->d_name + n - 4, ".del"))
+			{
+				snprintf(path, sizeof(path), "%s/%s", dirs[i], e->d_name);
+				unlink(path);
+			}
+		}
+		if (dir)
+			closedir(dir);
+	}
 }
 
 static int cmpDesc(const void *a, const void *b) { return *(const int *)b - *(const int *)a; }
@@ -61,8 +89,22 @@ int storageList(int *nums, int max)
 int storageNextNumber(void)
 {
 	static int nums[1000];
-	int count = storageList(nums, 1000);
-	return count ? nums[0] + 1 : 1;
+	int count = storageList(nums, 1000), next = count ? nums[0] + 1 : 1;
+	// Plain photos share the numbers, so everything sorts by time.
+	DIR *dir = opendir(DIR_GIF);
+	struct dirent *e;
+	while (dir && (e = readdir(dir)))
+	{
+		int num;
+		char ext[8];
+		if (sscanf(e->d_name, "WIG_%d.%7s", &num, ext) == 2 && !strcmp(ext, "jpg") && num >= next)
+			next = num + 1;
+	}
+	if (dir)
+		closedir(dir);
+	while (storageTrashed(next)) // keep the number free for an undo
+		next++;
+	return next;
 }
 
 // Area-averaging downscale of the w*h region at (sx, sy) to dw*dh.
@@ -167,11 +209,98 @@ bool storageLoadPreview(int num, u16 *previewL, u16 *previewR)
 	return ok;
 }
 
-void storageDelete(int num)
+static bool exists(const char *path)
+{
+	struct stat st;
+	return stat(path, &st) == 0;
+}
+
+bool storageExists(int num)
 {
 	char path[64];
 	photoPath(num, path, sizeof(path));
-	unlink(path);
+	return exists(path);
+}
+
+bool storageHasGif(int num)
+{
+	char path[64], jpg[64];
 	storageGifPath(num, path, sizeof(path));
-	unlink(path);
+	storagePhotoPath(num, jpg, sizeof(jpg));
+	return exists(path) || exists(jpg);
+}
+
+// The files of a shot: photo, GIF, JPG (a shot has one of the last two).
+static void shotPaths(int num, char paths[3][64])
+{
+	photoPath(num, paths[0], 64);
+	storageGifPath(num, paths[1], 64);
+	storagePhotoPath(num, paths[2], 64);
+}
+
+static void trashed(const char *path, char *out) { snprintf(out, 68, "%.63s.del", path); }
+
+void storageTrash(int num)
+{
+	char p[3][64], d[68];
+	shotPaths(num, p);
+	for (int i = 0; i < 3; i++)
+	{
+		trashed(p[i], d);
+		rename(p[i], d);
+	}
+}
+
+bool storageTrashed(int num)
+{
+	char p[3][64], d[68];
+	shotPaths(num, p);
+	trashed(p[0], d);
+	return exists(d);
+}
+
+void storageRestore(int num)
+{
+	char p[3][64], d[68];
+	shotPaths(num, p);
+	for (int i = 0; i < 3; i++)
+	{
+		trashed(p[i], d);
+		rename(d, p[i]);
+	}
+}
+
+void storagePurge(int num)
+{
+	char p[3][64], d[68];
+	shotPaths(num, p);
+	for (int i = 0; i < 3; i++)
+	{
+		trashed(p[i], d);
+		unlink(d);
+	}
+}
+
+u64 storageFreeBytes(void)
+{
+	FS_ArchiveResource r;
+	if (R_FAILED(FSUSER_GetArchiveResource(&r, SYSTEM_MEDIATYPE_SD)))
+		return ~0ULL;
+	return (u64)r.freeClusters * r.clusterSize;
+}
+
+u64 storageShotTime(int num)
+{
+	char path[64];
+	u64 t = 0;
+	photoPath(num, path, sizeof(path));
+	return R_SUCCEEDED(archive_getmtime(path, &t)) ? t : 0;
+}
+
+void storageDelete(int num)
+{
+	char p[3][64];
+	shotPaths(num, p);
+	for (int i = 0; i < 3; i++)
+		unlink(p[i]);
 }

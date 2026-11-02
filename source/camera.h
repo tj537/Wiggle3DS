@@ -8,6 +8,10 @@
 bool camOpen(void);
 // Viewfinder frame rate: 15, 20 or 30.
 void camSetFps(int fps);
+// Night mode: longer exposures at a lower frame rate.
+void camSetNight(bool on);
+// Selfie: the inner camera, mirrored; camRight then returns the same image.
+void camSetSelfie(bool on);
 void camResume(void);
 void camPause(void);
 void camClose(void);

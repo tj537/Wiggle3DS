@@ -18,6 +18,8 @@ void drawRoundRectOutline(u16 *fb, int sw, int x, int y, int w, int h, int r, in
 void drawShadow(u16 *fb, int sw, int x, int y, int w, int h, int r, int alpha);
 void drawCircle(u16 *fb, int sw, float cx, float cy, float r, u16 color, int alpha);
 void drawCircleGrad(u16 *fb, int sw, float cx, float cy, float r, u16 c0, u16 c1, int alpha);
+// A disc with a second disc (bx, by, br) cut out: nothing is drawn there.
+void drawCrescent(u16 *fb, int sw, float cx, float cy, float r, float bx, float by, float br, u16 color, int alpha);
 void drawRing(u16 *fb, int sw, float cx, float cy, float r, float thick, u16 color, int alpha);
 
 // Scales the w*h region at (sx, sy) of a row-major image into dw*dh at
