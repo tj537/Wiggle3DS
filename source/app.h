@@ -15,7 +15,7 @@ typedef enum
 	MODE_SETTINGS,
 } Mode;
 
-#define APP_VERSION "v0.0.1"
+#define APP_VERSION "v0.1.0"
 #define THEME_COUNT 6
 
 // Saved to sdmc:/Wiggle3DS/settings.txt.
@@ -60,7 +60,7 @@ typedef enum
 #define HEADER_BTN_H 26
 #define HEADER_PILL_W 40
 #define HEADER_PILL_GAP 6
-typedef enum { HB_DOUBLE, HB_SELFIE, HB_NIGHT, HB_SHARE, HB_SETTINGS, HB_COUNT } HeaderButton;
+typedef enum { HB_RESET, HB_SELFIE, HB_NIGHT, HB_SHARE, HB_SETTINGS, HB_COUNT } HeaderButton;
 
 // Home: a card of capture defaults (2x2 tiles), then the newest shots
 #define TILE_X 18
@@ -106,7 +106,8 @@ typedef enum { TILE_FILTER, TILE_SMOOTH, TILE_SPEED, TILE_QUICK, TILE_COUNT } Ti
 #define MENU_X 12
 #define MENU_Y 44
 #define MENU_BTN_W 90
-#define MENU_BTN_H 34
+#define MENU_BTN_H 54
+#define MENU_IMG_H 32 // the live preview in each tile
 #define MENU_GAP 8
 #define MENU_ROW (MENU_BTN_H + MENU_GAP)
 #define MENU_HEAD 20      // a group's heading
@@ -140,9 +141,6 @@ typedef struct
 	int menuSel, menuScroll; // menuScroll: pixels
 	bool camOk, selfie; // selfie: the inner camera, plain photos
 	bool camStarting;   // at start, before the camera is up
-	// Double exposure: on, and the first exposure while it waits for the second.
-	bool doubleExp, haveFirst;
-	const u16 *firstL, *firstR;
 	const u16 *liveL, *liveR;
 
 	// Gallery: thumbnails around the visible columns (the first ones also
@@ -173,6 +171,7 @@ typedef struct
 	Offset offset;
 	ShotInfo savedInfo;
 	bool saving, fromGallery, aligning;
+	bool confirmDiscard; // B with unsaved changes: asks first
 	int stacking, stackFrames; // night mode: frames taken so far (0 if not), of how many
 	bool compare; // Y held: the shot without its filter
 

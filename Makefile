@@ -41,7 +41,7 @@ ICON		:=	meta/icon.png
 # replaces the installed title. Raise the version for each release.
 APP_UNIQUE_ID		:=	0xF57E3
 APP_PRODUCT_CODE	:=	CTR-H-WGLS
-APP_VERSION		:=	1.0.0
+APP_VERSION		:=	0.1.0
 RSF			:=	meta/cia.rsf
 BANNER_IMAGE		:=	meta/banner.png
 BANNER_AUDIO		:=	meta/banner.wav
@@ -173,7 +173,7 @@ ifneq ($(ROMFS),)
 	export _3DSXFLAGS += --romfs=$(CURDIR)/$(ROMFS)
 endif
 
-.PHONY: all clean cia send-cia
+.PHONY: all clean cia send-cia qr
 
 #---------------------------------------------------------------------------------
 all: $(BUILD) $(GFXBUILD) $(DEPSDIR) $(ROMFS_T3XFILES) $(T3XHFILES)
@@ -214,6 +214,10 @@ cia: all
 # make send-cia IP=192.168.x.y also pushes it to FBI's "Receive URLs over the network".
 send-cia: cia
 	@python3 tools/send-cia.py $(TARGET).cia $(if $(IP),--push $(IP))
+
+# The QR code in the README that installs the newest release from GitHub.
+qr:
+	@python3 tools/release-qr.py
 
 #---------------------------------------------------------------------------------
 $(GFXBUILD)/%.t3x	$(BUILD)/%.h	:	%.t3s

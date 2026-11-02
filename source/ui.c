@@ -275,19 +275,19 @@ bool uiTopWiggles(const App *a, int *delayMs)
 
 // ---- top screen ----
 
+// Plain photos keep a moving filter still, as in the JPG.
+static bool photoMode(const App *a) { return a->selfie || a->settings.smooth == SMOOTH_OFF; }
+
 static void homeTop(App *a, u16 *fb, int eye, bool stereo)
 {
 	drawClear(fb, 400, C_BLACK);
 	int filter = a->filterMenu ? a->menuSel : a->settings.filter;
-	// Plain photos keep a moving filter still, as in the JPG.
-	bool photoMode = a->selfie || a->settings.smooth == SMOOTH_OFF;
+	bool still = photoMode(a);
 	if (a->camOk && a->liveL)
 		drawFiltered(fb, 400, 40, 0, 320, 240, eye ? a->liveR : a->liveL, CAM_W, 0, 0, CAM_W, CAM_H, filter, 0,
-		             photoMode ? 0 : (int)(a->now / LIVE_GLITCH_MS), a->settings.strength);
+		             still ? 0 : (int)(a->now / LIVE_GLITCH_MS), a->settings.strength);
 	else if (!a->camStarting)
 		drawTextCentered(fb, 400, &fontBody, 200, 112, C_DIM, 255, "Camera unavailable");
-	if (a->haveFirst) // the first exposure over the live view, to line up the second
-		drawImageAlpha(fb, 400, 40, 0, 320, 240, eye ? a->firstR : a->firstL, CAM_W, 0, 0, CAM_W, CAM_H, filterLut(filter), 110);
 	if (a->settings.grid)
 		for (int k = 1; k <= 2; k++)
 		{
@@ -325,6 +325,12 @@ static void homeTop(App *a, u16 *fb, int eye, bool stereo)
 	(void)stereo; // a clean viewfinder: what is on shows on the bottom screen
 }
 
+// A filter's name, with its strength when below 100 %.
+static const char *filterLabel(int filter, int strength)
+{
+	return filter && strength < 100 ? tfmt("%s %d%%", filterName(filter), strength) : filterName(filter);
+}
+
 static void galleryTop(App *a, u16 *fb, int eye, bool stereo)
 {
 	drawClear(fb, 400, C_BLACK);
@@ -347,14 +353,9 @@ static void galleryTop(App *a, u16 *fb, int eye, bool stereo)
 	if (stereo)
 		overlayPill(fb, 400, 200, 212, "3D view");
 	else if (info)
-		overlayPill(fb, 400, 200, 212, a->playing ? tfmt("%s · %s · %d ms", filterName(filter), wiggleSmoothName(smooth), delay)
+		overlayPill(fb, 400, 200, 212, photo ? tfmt("%s · photo", filterLabel(filter, SHOT_STRENGTH(info)))
+		                               : a->playing ? tfmt("%s · %s · %d ms", filterLabel(filter, SHOT_STRENGTH(info)), wiggleSmoothName(smooth), delay)
 		                                          : tfmt("%s · paused", filterName(filter)));
-}
-
-// A filter's name, with its strength when below 100 %.
-static const char *filterLabel(int filter, int strength)
-{
-	return filter && strength < 100 ? tfmt("%s %d%%", filterName(filter), strength) : filterName(filter);
 }
 
 static void reviewTop(App *a, u16 *fb, int eye, bool stereo)
@@ -638,8 +639,8 @@ static void homeEmpty(u16 *fb)
 {
 	drawRoundRect(fb, 320, 12, RECENT_Y, 296, RECENT_H, 10, C_SURFACE, 255);
 	drawRoundRectOutline(fb, 320, 12, RECENT_Y, 296, RECENT_H, 10, 1, C_STROKE, 255);
-	drawTextCentered(fb, 320, &fontBody, 160, RECENT_Y + 9, C_TEXT, 255, "No wigglegrams yet");
-	drawTextCentered(fb, 320, &fontSmall, 160, RECENT_Y + 28, C_DIM, 255, "Press A to take your first one");
+	drawTextCentered(fb, 320, &fontBody, 160, RECENT_Y + 9, C_TEXT, 255, "Nothing here yet");
+	drawTextCentered(fb, 320, &fontSmall, 160, RECENT_Y + 28, C_DIM, 255, "Press A for your first shot");
 }
 
 // Each filter swatch shows what the filter does to skin, sky and leaves.
@@ -669,7 +670,7 @@ static void headerButtons(App *a, u16 *fb)
 	for (int i = 0; i < HB_COUNT; i++)
 	{
 		int x = headerX(i);
-		bool on = (i == HB_NIGHT && a->settings.night) || (i == HB_SELFIE && a->selfie) || (i == HB_DOUBLE && a->doubleExp);
+		bool on = (i == HB_NIGHT && a->settings.night) || (i == HB_SELFIE && a->selfie);
 		if (on)
 			drawRoundRectGrad(fb, 320, x, HEADER_BTN_Y, HEADER_PILL_W, HEADER_BTN_H, HEADER_BTN_H / 2, C_ACC0, C_ACC1, 255);
 		else
@@ -678,12 +679,11 @@ static void headerButtons(App *a, u16 *fb)
 		float cx = x + HEADER_PILL_W / 2.0f, cy = HEADER_CY;
 		switch (i)
 		{
-		case HB_DOUBLE: // two exposures overlapping, the second filled once the first is taken
-			drawRing(fb, 320, cx - 3.5f, cy, 6, 1.4f, ink, 255);
-			if (a->haveFirst)
-				drawCircle(fb, 320, cx + 3.5f, cy, 6, ink, 200);
-			else
-				drawRing(fb, 320, cx + 3.5f, cy, 6, 1.4f, ink, 255);
+		case HB_RESET: // an arrow turning back
+			drawRing(fb, 320, cx, cy, 6, 1.6f, ink, 255);
+			drawFill(fb, 320, (int)cx - 7, (int)cy - 7, 7, 6, C_SURFACE2, 255); // the gap at the top left
+			iconLine(fb, cx - 6, cy - 1, cx - 8.5f, cy - 4.5f, ink);
+			iconLine(fb, cx - 6, cy - 1, cx - 2.5f, cy - 3, ink);
 			break;
 		case HB_SELFIE: // forth and back: turned around
 			iconLine(fb, cx - 7, cy - 3, cx + 7, cy - 3, ink);
@@ -731,8 +731,7 @@ static void defaultsPanel(App *a, u16 *fb)
 	drawRoundRectOutline(fb, 320, PANEL_X, PANEL_Y, PANEL_W, PANEL_H, 14, 1, C_STROKE, 255);
 	int x, y;
 
-	tile(fb, TILE_FILTER, "Filter", st->filter && st->strength < 100 ? tfmt("%s %d%%", filterName(st->filter), st->strength)
-	                                                                 : filterName(st->filter));
+	tile(fb, TILE_FILTER, "Filter", filterName(st->filter));
 	tileRect(TILE_FILTER, &x, &y);
 	swatches(fb, x + TILE_W - 28, y + TILE_H / 2.0f, st->filter);
 
@@ -775,7 +774,7 @@ static void thumb(App *a, u16 *fb, int idx, int x, int y, int w, int h)
 	else
 	{
 		drawRoundRect(fb, 320, x, y, w, h, 6, C_SURFACE2, 255);
-		drawTextCentered(fb, 320, &fontSmall, x + w / 2, y + h / 2 - 6, C_DIM, 255, "old");
+		drawTextCentered(fb, 320, &fontSmall, x + w / 2, y + h / 2 - 6, C_DIM, 255, "No preview");
 	}
 	if (a->exporting && exportIsPending(a->shots[idx]))
 	{
@@ -809,27 +808,27 @@ static void filterMenu(App *a, u16 *fb)
 			y += off;
 			if (y + MENU_BTN_H < MENU_Y - 8 || y > MENU_Y + MENU_VIEW_H)
 				continue;
+			// A tile: the live view with the filter on top, the name below.
 			bool sel = f == a->menuSel, current = f == a->settings.filter;
 			if (sel)
-				drawRoundRectGrad(fb, 320, x, y, MENU_BTN_W, MENU_BTN_H, 12, C_ACC0, C_ACC1, 255);
+				drawRoundRectGrad(fb, 320, x, y, MENU_BTN_W, MENU_BTN_H, 10, C_ACC0, C_ACC1, 255);
 			else
-				drawRoundRect(fb, 320, x, y, MENU_BTN_W, MENU_BTN_H, 12, C_SURFACE2, 255);
+				drawRoundRect(fb, 320, x, y, MENU_BTN_W, MENU_BTN_H, 10, C_SURFACE2, 255);
 			if (current && !sel)
-				drawRoundRectOutline(fb, 320, x, y, MENU_BTN_W, MENU_BTN_H, 12, 1, C_ACC1, 255);
-			if (isFavorite(f))
-				drawStar(fb, 320, x + MENU_BTN_W - 9, y + 8, 4.5f, sel ? C_WHITE : C_STAR, 255);
-			if (!filterHasSwatches(f))
-			{
-				// Glitches: a little zigzag instead of color dots.
-				u16 ink = sel ? C_WHITE : C_ACC1;
-				for (int k = 0; k < 4; k++)
-					iconLine(fb, x + 7 + k * 4, y + MENU_BTN_H / 2.0f + (k & 1 ? 3 : -3), x + 11 + k * 4,
-					         y + MENU_BTN_H / 2.0f + (k & 1 ? -3 : 3), ink);
-			}
+				drawRoundRectOutline(fb, 320, x, y, MENU_BTN_W, MENU_BTN_H, 10, 1, C_ACC1, 255);
+			int iw = MENU_BTN_W - 6, ih = MENU_IMG_H, ch = CAM_W * ih / iw;
+			if (a->camOk && a->liveL)
+				drawFiltered(fb, 320, x + 3, y + 3, iw, ih, a->liveL, CAM_W, 0, (CAM_H - ch) / 2, CAM_W, ch, f, 7,
+				             photoMode(a) ? 0 : (int)(a->now / LIVE_GLITCH_MS), 100);
 			else
-				swatches(fb, x + 13, y + MENU_BTN_H / 2.0f, f);
-			drawText(fb, 320, &fontSmall, x + 36, y + (MENU_BTN_H - lineH(&fontSmall)) / 2, sel || current ? C_TEXT : C_DIM,
-			         255, current ? tfmt("%s ✓", filterName(f)) : filterName(f));
+				drawRoundRect(fb, 320, x + 3, y + 3, iw, ih, 7, C_SURFACE, 255);
+			if (isFavorite(f))
+			{
+				drawCircle(fb, 320, x + MENU_BTN_W - 11, y + 11, 7, C_BLACK, 140);
+				drawStar(fb, 320, x + MENU_BTN_W - 11, y + 11, 5, C_STAR, 255);
+			}
+			drawTextCentered(fb, 320, &fontSmall, x + MENU_BTN_W / 2, y + 3 + ih + (MENU_BTN_H - 3 - ih - lineH(&fontSmall)) / 2,
+			                 sel ? C_WHITE : current ? C_TEXT : C_DIM, 255, filterName(f));
 		}
 	}
 
@@ -908,11 +907,6 @@ static void homeBottom(App *a, u16 *fb)
 		static const char *const btns[] = {"◀▶", "A", "B"}, *const labels[] = {"Choose", "Open", "Back"};
 		centeredHints(fb, 220, 3, btns, labels);
 	}
-	else if (a->haveFirst)
-	{
-		static const char *const btns[] = {"A", "B"}, *const labels[] = {"Second exposure", "Drop the first"};
-		centeredHints(fb, 220, 2, btns, labels);
-	}
 	else
 	{
 		static const char *const btns[] = {"A", "Y", "X", "START"};
@@ -989,8 +983,9 @@ static void galleryBottom(App *a, u16 *fb)
 	}
 	else
 	{
-		static const char *const btns[] = {"A", "Y", "X", "B"};
-		const char *const labels[] = {"Edit", a->playing ? "Pause" : "Play", "Delete", "Home"};
+		// Home has its button at the top; the hint shows how to pick several.
+		static const char *const btns[] = {"A", "Y", "X", "Hold"};
+		const char *const labels[] = {"Edit", a->playing ? "Pause" : "Play", "Delete", "Select"};
 		centeredHints(fb, 222, 4, btns, labels);
 	}
 
@@ -1031,6 +1026,15 @@ static void reviewButtons(App *a, u16 *fb)
 		                 tfmt("✓ Saved as WIG_%04d", a->shotNum));
 	}
 
+	if (a->confirmDiscard)
+	{
+		bool fresh = a->shotNum < 0;
+		dialog(fb, 40, 66, 240, 104);
+		drawTextCentered(fb, 320, &fontBody, 160, 82, C_TEXT, 255, fresh ? "Discard this shot?" : "Discard your changes?");
+		drawTextCentered(fb, 320, &fontSmall, 160, 104, C_DIM, 255, fresh ? "It hasn't been saved yet." : "The saved version stays.");
+		button(fb, 56, 132, 100, "B", "Keep", false, C_SURFACE2);
+		button(fb, 164, 132, 100, "A", "Discard", false, C_RED);
+	}
 	if (a->saving)
 	{
 		dialog(fb, 60, 84, 200, 72);
@@ -1083,7 +1087,7 @@ static void reviewBottom(App *a, u16 *fb)
 	}
 	else
 	{
-		const char *hint = "L R strength · hold Y for the original";
+		const char *hint = a->shotFilter ? "L R strength · hold Y for the original" : "▲▼ for a filter";
 		drawRoundRect(fb, 320, CARD_X + 8, CARD_Y + 8, textWidth(&fontSmall, hint) + 20, 20, 10, C_BLACK, 150);
 		drawText(fb, 320, &fontSmall, CARD_X + 18, CARD_Y + 8 + (20 - lineH(&fontSmall)) / 2, C_TEXT, 255, hint);
 	}
@@ -1149,7 +1153,7 @@ static const char *sizeText(u64 bytes)
 static void settingsBottom(App *a, u16 *fb)
 {
 	static const char *const notes[SET_COUNT] = {
-		[SET_GRID] = "viewfinder", [SET_FPS] = "saves battery", [SET_PHOTO_EYE] = "transition off", [SET_RESET] = "also ▼ on home", [SET_GIF_SIZE] = "messengers",
+		[SET_GRID] = "viewfinder", [SET_FPS] = "saves battery", [SET_PHOTO_EYE] = "transition off", [SET_RESET] = "filter, speed, modes", [SET_GIF_SIZE] = "messengers",
 	};
 	background(fb);
 	int tw = drawText(fb, 320, &fontTitle, 16, 9, C_TEXT, 255, "Settings");
@@ -1244,7 +1248,7 @@ static void shareBottom(App *a, u16 *fb)
 	{
 		step(fb, 48, 1, "Put your phone on the same WiFi");
 		step(fb, 78, 2, "Scan the code with its camera");
-		step(fb, 108, 3, "Hold a GIF, then Save to Photos");
+		step(fb, 108, 3, "Hold a picture, then Save to Photos");
 
 		int w = textWidth(&fontBody, a->shareUrl) + 32;
 		drawRoundRect(fb, 320, 160 - w / 2, 146, w, 28, 14, C_SURFACE, 255);

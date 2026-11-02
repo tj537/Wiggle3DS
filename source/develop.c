@@ -143,26 +143,3 @@ void matchEyes(const u16 *left, u16 *right)
 		right[i] = lut[0][p >> 11] << 11 | lut[1][p >> 5 & 63] << 5 | lut[2][p & 31];
 	}
 }
-
-void doubleExpose(u16 *shot, const u16 *first)
-{
-	// Per channel: a and b at 85 %, then screen: a + b - a * b.
-	static u8 lut5[32], lut6[64];
-	static bool ready;
-	if (!ready)
-	{
-		for (int v = 0; v < 32; v++)
-			lut5[v] = v * 85 / 100;
-		for (int v = 0; v < 64; v++)
-			lut6[v] = v * 85 / 100;
-		ready = true;
-	}
-	for (int i = 0; i < PIXELS; i++)
-	{
-		u16 p = shot[i], q = first[i];
-		int ar = lut5[p >> 11], ag = lut6[p >> 5 & 63], ab = lut5[p & 31];
-		int br = lut5[q >> 11], bg = lut6[q >> 5 & 63], bb = lut5[q & 31];
-		int r = ar + br - ar * br / 31, g = ag + bg - ag * bg / 63, b = ab + bb - ab * bb / 31;
-		shot[i] = r << 11 | g << 5 | b;
-	}
-}

@@ -109,15 +109,6 @@ int main(int argc, char **argv)
 	app.settings.night = false;
 	app.settings.smooth = 1;
 	render(dir, "home_wiggle");
-	app.doubleExp = app.haveFirst = true;
-	app.firstL = pair[1];
-	app.firstR = pair[0];
-	app.settings.strength = 60;
-	render(dir, "home_double");
-	app.homeFocus = 1;
-	render(dir, "home_focus");
-	app.homeFocus = -1;
-	app.doubleExp = app.haveFirst = false;
 	app.settings.strength = 100;
 	app.filterMenu = true;
 	app.menuSel = 53;
@@ -168,6 +159,7 @@ int main(int argc, char **argv)
 	app.offset = (Offset){12, 2};
 	app.delayMs = 120;
 	app.shotFilter = 7;
+	app.shotStrength = 100;
 	render(dir, "review_tip");
 	app.settings.tipDone = true;
 	app.shotStrength = 50;
@@ -181,6 +173,9 @@ int main(int argc, char **argv)
 	app.shotNum = 3;
 	render(dir, "review_toast");
 	app.toast[0] = 0;
+	app.confirmDiscard = true;
+	render(dir, "review_discard");
+	app.confirmDiscard = false;
 	app.saving = true;
 	render(dir, "review_saving");
 	app.saving = false;

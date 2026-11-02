@@ -20,7 +20,6 @@
 
 static App app;
 static u16 shotL[CAM_W * CAM_H], shotR[CAM_W * CAM_H];
-static u16 firstL[CAM_W * CAM_H], firstR[CAM_W * CAM_H]; // double exposure
 
 // Touch: where the current touch started and where it was last seen.
 static bool touching, released;
@@ -47,7 +46,7 @@ static void updateSpeedup(void)
 {
 	int liveFilter = app.filterMenu ? app.menuSel : app.settings.filter;
 	int want = app.mode == MODE_REVIEW || app.mode == MODE_GALLERY || app.exporting > 0 ||
-	           (app.mode == MODE_HOME && filterHasGlitch(liveFilter)); // glitches on the live view
+	           (app.mode == MODE_HOME && (filterHasGlitch(liveFilter) || app.filterMenu)); // live glitches, menu previews
 	if (want != speedupOn)
 		osSetSpeedupEnable(want);
 	speedupOn = want;
@@ -479,22 +478,6 @@ static void capture(void)
 		app.flashAt = osGetTime(); // after the extra frames, which want a clear view
 	if (!app.selfie) // a selfie has one image in both eyes
 		matchEyes(shotL, shotR);
-	if (app.doubleExp && !app.haveFirst)
-	{
-		// The first of two: kept, and shown over the viewfinder until the second.
-		memcpy(firstL, shotL, sizeof(shotL));
-		memcpy(firstR, shotR, sizeof(shotR));
-		app.haveFirst = true;
-		showToast(false, "First exposure · now the second");
-		topDirty = bottomDirty = true;
-		return;
-	}
-	if (app.haveFirst)
-	{
-		doubleExpose(shotL, firstL);
-		doubleExpose(shotR, firstR);
-		app.haveFirst = false;
-	}
 	wiggleSetImages(shotL, shotR);
 	app.shotNum = -1;
 	app.pivotX = CAM_W / 2;
@@ -611,6 +594,19 @@ static void saveFromReview(void)
 
 static void updateReview(u32 down)
 {
+	if (app.confirmDiscard)
+	{
+		// Same buttons as the delete dialog: keep editing left, discard right.
+		Hit hit = released ? uiDeleteDialogHit(touchX, touchY) : HIT_NONE;
+		if ((down & KEY_A) || hit == HIT_DELETE)
+		{
+			app.confirmDiscard = false;
+			backFromReview();
+		}
+		else if ((down & KEY_B) || hit == HIT_CANCEL)
+			app.confirmDiscard = false;
+		return;
+	}
 	if (!uiShotIsPhoto(&app) && touching && inRect(startX, startY, CARD_X, CARD_Y, CARD_W, CARD_H) && !uiFilterPillHit(startX, startY) &&
 	    !uiSmoothPillHit(startX, startY))
 	{
@@ -664,7 +660,12 @@ static void updateReview(u32 down)
 	if ((down & KEY_A) || hit == HIT_SAVE)
 		saveFromReview();
 	else if ((down & KEY_B) || hit == HIT_BACK)
-		backFromReview();
+	{
+		if (uiReviewChanged(&app))
+			app.confirmDiscard = true; // nothing is lost without asking
+		else
+			backFromReview();
+	}
 }
 
 // ---- share ----
@@ -1022,7 +1023,6 @@ static void resetDefaults(void)
 		app.liveL = camLeft();
 		app.liveR = camRight();
 	}
-	app.doubleExp = app.haveFirst = false;
 	saveSettings();
 	showToast(false, "Back to the defaults");
 	topDirty = bottomDirty = true;
@@ -1059,6 +1059,8 @@ static void updateHome(u32 down)
 		app.liveL = camLeft();
 		app.liveR = camRight();
 		topDirty = true;
+		if (app.filterMenu) // its tiles show the live view
+			bottomDirty = true;
 	}
 
 	// Self-timer: counting down; A or B (or a tap) stops it.
@@ -1103,12 +1105,6 @@ static void updateHome(u32 down)
 		openShare();
 		return;
 	}
-	if (app.haveFirst && (down & KEY_B))
-	{
-		app.haveFirst = false;
-		showToast(false, "First exposure dropped");
-		return;
-	}
 	if ((down & KEY_B) || tapped(uiAllButtonHit))
 	{
 		openGallery(0);
@@ -1127,11 +1123,9 @@ static void updateHome(u32 down)
 		openFilterMenu();
 		return;
 	}
-	if (header == HB_DOUBLE)
+	if (header == HB_RESET)
 	{
-		app.doubleExp = !app.doubleExp;
-		app.haveFirst = false;
-		showToast(false, app.doubleExp ? "Double exposure · two shots in one" : "Double exposure off");
+		resetDefaults();
 		return;
 	}
 	if (header == HB_SELFIE)
@@ -1203,8 +1197,6 @@ int main(void)
 	checkStatus();
 	app.shotL = shotL;
 	app.shotR = shotR;
-	app.firstL = firstL;
-	app.firstR = firstR;
 	app.shotNum = -1;
 	app.delayMs = app.settings.delayMs;
 	app.scrollTo = -1;

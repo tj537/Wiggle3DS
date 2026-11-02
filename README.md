@@ -1,160 +1,171 @@
 # Wiggle3DS
 
-Retro-Foto- und Wiggle-Workstation für den New 3DS (XL). Sie nimmt mit beiden Außenkameras ein 3D-Foto auf und macht daraus ein Wigglegram-GIF, eine kleine Kamerafahrt wie bei den Nimslo- und Nishika-Kameras mit mehreren Linsen. Dazu kommen normale Fotos, Selfies, ein Nachtmodus, Doppelbelichtung und 68 Filter von Classic über Datamosh bis Circuit Bending.
+**English** · [Deutsch](README.de.md)
 
-## Was sie kann
+A retro photo and wiggle workstation for the New 3DS (XL). It takes a 3D photo with both outer cameras and turns it into a wigglegram GIF, a small camera move like the multi-lens Nimslo and Nishika cameras made. On top of that: plain photos, selfies, a night mode and 68 filters, from classic film looks to datamosh and circuit bending.
 
-- **Wigglegrams:** Beide Außenkameras lösen gleichzeitig aus, du tippst auf dein Motiv, und die App macht ein wackelndes GIF, das sich um diesen Punkt dreht. Übergänge: Hard cut, Smooth, Extra smooth.
-- **Normale Fotos:** Steht die Transition auf **Off**, wird die Aufnahme ein normales Foto (JPG). Beide Kamerabilder bleiben gespeichert, beim Bearbeiten machst du aus einem Foto jederzeit wieder ein Wiggle und umgekehrt.
-- **68 Filter in Gruppen:** Classic, Color, RGB & Ghost, Tape & Screen, Data Mosh, Circuit Bending, Print & Pixel, Warp. Mit X im Filtermenü markierst du Favoriten, die stehen dann ganz oben. Die Glitch-Filter verändern das Bild selbst (RGB Split, VHS, Datamosh, Pixel Sort, Melt, Keyframe …), viele davon bewegen sich. Im GIF sind das zwei Wiggle-Durchläufe mit eigenem Muster, und genau die zeigt auch die Vorschau beim Bearbeiten.
-- **Doppelbelichtung:** zwei Aufnahmen übereinander wie auf einem Film, auch als Wiggle. Die erste liegt halb durchsichtig über dem Sucher, damit du die zweite ausrichten kannst.
-- **Filterstärke:** jeder Filter von 0 bis 100 %, mit L und R in Schritten von 10 %.
-- **Nachtmodus:** längere Belichtung, und vier Bilder werden zu einem gemittelt, das rauscht deutlich weniger. Bewegte Stellen bleiben vom ersten Bild, so gibt es keine Geisterbilder.
-- **Selfie:** die Innenkamera, gespiegelt, für normale Fotos.
-- **Sauberes 3D:** Beide Sensoren sind synchronisiert, Helligkeit und Farbe des rechten Auges werden ans linke angeglichen, damit das GIF nicht flackert.
-- **Galerie:** drei Reihen, die seitwärts scrollen, Mehrfachauswahl per Gedrückthalten, Löschen mit Rückgängig.
-- **Aufs Handy:** QR-Code scannen, dann lädst du GIFs und Fotos im WLAN direkt aufs Handy.
-- **Schnell:** GIFs und JPGs entstehen im Hintergrund, die Kamera ist sofort wieder bereit.
+## Install
 
-## Bedienung
+Scan the code on your 3DS with [FBI](https://github.com/lifehackerhansol/FBI): **Remote Install → Scan QR Code**. It always points to the newest [release](https://github.com/tj537/Wiggle3DS/releases/latest); FBI downloads the CIA straight from GitHub and installs it.
 
-Die App ist auf Englisch.
+<img src="docs/install-qr.svg" width="200" alt="QR code: newest Wiggle3DS.cia">
 
-### Startscreen
+Or download `Wiggle3DS.cia` from the [latest release](https://github.com/tj537/Wiggle3DS/releases/latest), copy it to the SD card and install it in FBI. Your photos in `Wiggle3DS/` are kept across updates.
 
-Oben läuft der Sucher, unten sind deine Standards und die letzten Bilder.
+## What it does
 
-- **A, L, R, ZL oder ZR:** auslösen
-- **Y:** Filterauswahl. Antippen zeigt den Filter sofort im Sucher, nochmal Antippen oder A übernimmt ihn, L R stellt die Stärke ein, X macht ihn zum Favoriten.
-- **X:** Nachtmodus an oder aus
-- **B oder „All“:** Galerie
-- **▶:** zu den letzten Bildern, dort wählst du mit ◀ ▶ und öffnest mit A
-- **▼:** alle Standards zurücksetzen (Filter, Stärke, Transition, Speed, Quick capture, Nacht, Selfie, Doppelbelichtung). Das geht auch in den Einstellungen unter „Capture defaults“.
-- **SELECT:** aufs Handy teilen
-- **START:** beenden
+- **Wigglegrams:** both outer cameras fire at the same moment, you tap your subject, and the app makes a wiggling GIF that turns around that point. Transitions: Hard cut, Smooth, Extra smooth.
+- **Plain photos:** with the transition set to **Off**, a shot becomes a normal photo (JPG). Both camera images are kept, so in edit you can turn a photo into a wiggle again, and back.
+- **68 filters in groups:** Classic, Color, RGB & Ghost, Tape & Screen, Data Mosh, Circuit Bending, Print & Pixel, Warp. Every filter shows a live preview of your viewfinder in the menu; X marks favorites, which are listed first. The glitch filters change the image itself (RGB split, VHS, datamosh, pixel sort, melt, keyframe …), and many of them move. In the GIF that is two wiggle loops with patterns of their own, exactly what the preview in edit shows.
+- **Filter strength:** every filter from 0 to 100 %, with L and R in steps of 10 %.
+- **Night mode:** longer exposures, and four frames averaged into one for much less noise. Parts that move keep the first frame, so nothing ghosts.
+- **Selfie:** the inner camera, mirrored, for plain photos.
+- **Clean 3D:** both sensors are synced, and the right eye's brightness and color are matched to the left, so the GIF doesn't flicker.
+- **Gallery:** three rows that scroll sideways, hold to select several, delete with undo.
+- **To your phone:** scan a QR code and download GIFs and photos over Wi-Fi.
+- **Fast:** GIFs and JPGs are made in the background; the camera is ready again right away.
 
-Die Buttons oben, von links: Doppelbelichtung, Selfie, Nachtmodus, Share, Einstellungen. Bei der Doppelbelichtung machst du erst eine Aufnahme, dann die zweite; B verwirft die erste. Die LED links zeigt den Akku: grün, orange oder rot, mit Ring beim Laden.
+## Controls
 
-Die Kacheln darunter sind die Standards für neue Aufnahmen: Filter, Transition (Off heißt Foto), Speed und Quick capture. Mit Quick capture wird jede Aufnahme sofort gespeichert, ohne vorher den Bearbeiten-Screen zu öffnen.
+### Home
 
-### Bearbeiten
+The viewfinder is on top; below are your capture defaults and the newest shots.
 
-- **Tippen aufs Motiv:** setzt den Drehpunkt, beim ersten Mal erklärt ein Hinweis das.
-- **◀ ▶ oder der Regler:** Speed
-- **▲ ▼:** Filter, **L R:** Filterstärke
-- **X:** Transition, auch auf Off, dann wird es ein Foto
-- **Y halten:** zeigt das Original ohne Filter
-- **A:** speichern, **B:** zurück
+- **A, L, R, ZL or ZR:** take a shot
+- **Y:** filter menu. Touching a filter previews it in the viewfinder, touching it again or A applies it, L R sets the strength, X makes it a favorite.
+- **X:** night mode on or off
+- **B or "All":** gallery
+- **▶:** to the newest shots; choose with ◀ ▶, open with A
+- **▼:** reset the capture defaults (filter, strength, transition, speed, quick capture, night, selfie). Also the button at the top left, and "Capture defaults" in the settings.
+- **SELECT:** share to your phone
+- **START:** quit
 
-Das Original bleibt immer ungefiltert gespeichert, du kannst also alles später ändern.
+The buttons at the top, from the left: reset to defaults, selfie, night mode, share, settings. The LED on the left shows the battery: green, orange or red, with a ring while charging.
 
-### Galerie
+The tiles below are the defaults for new shots: filter, transition (Off means photo), speed and quick capture. With quick capture every shot is saved right away, without the edit screen.
 
-- **Wischen:** scrollt mit Schwung
-- **Steuerkreuz:** wählt ein Bild, **L R:** springt 4 Spalten
-- **Antippen:** wählt ein Bild, **nochmal Antippen oder A:** öffnet es
-- **Y:** abspielen oder pausieren
-- **X:** löschen, danach ein paar Sekunden lang **Y** für Rückgängig
-- **Bild gedrückt halten:** startet die Mehrfachauswahl, dann tippst du weitere an und löschst sie mit X
+### Edit
 
-### Einstellungen
+- **Tap your subject:** sets the pivot; the first time, a hint explains it.
+- **◀ ▶ or the slider:** speed
+- **▲ ▼:** filter, **L R:** filter strength
+- **X:** transition, including Off, which makes it a photo
+- **Hold Y:** shows the original without the filter
+- **A:** save, **B:** back (it asks first if something would be lost)
 
-Farbschema, Selbstauslöser, Gitterlinien, Auslöseton, Blitz-Effekt, Sucher-fps, welche Kamera für Fotos (Standard rechts), Galerie-Autoplay, GIF-Größe (voll oder halb) und GIF-Form (4:3 oder 1:1). Oben stehen die Version, die Anzahl der Aufnahmen und der freie Speicher. Alles landet in `Wiggle3DS/settings.txt`.
+The original is always kept unfiltered, so you can change everything later.
 
-### Aufs Handy
+### Gallery
 
-SELECT oder Share zeigt oben einen QR-Code. Scannst du ihn mit dem Handy im selben WLAN, öffnet sich eine Seite mit allen GIFs und Fotos. Dort hältst du ein Bild gedrückt und wählst „Zu Fotos hinzufügen“, oder du tippst auf „Save“. Der Webserver (Port 8080) läuft nur, solange dieser Screen offen ist.
+- **Swipe:** scrolls with momentum
+- **D-pad:** chooses a shot, **L R:** jumps 4 columns
+- **Tap:** chooses a shot, **tap again or A:** opens it
+- **Y:** play or pause
+- **X:** delete, then **Y** for a few seconds to undo
+- **Hold a shot:** starts selecting several; tap more, then delete them with X
 
-## Dateien auf der SD-Karte
+### Settings
 
-- `Wiggle3DS/GIF/WIG_0001.gif`: ein fertiges Wigglegram, es läuft endlos
-- `Wiggle3DS/GIF/WIG_0001.jpg`: ein Foto (Transition Off)
-- `Wiggle3DS/Photos/WIG_0001.w3d`: beide Kamerabilder mit allen Einstellungen, für die Galerie und zum neu Bearbeiten
-- `Wiggle3DS/settings.txt`: die Einstellungen
+Color theme, self-timer, grid lines, shutter sound, flash effect, viewfinder fps, which camera takes photos (right by default), gallery autoplay, GIF size (full or half) and GIF shape (4:3 or 1:1), and resetting the capture defaults. The top line shows the version, the number of shots and the free space. Everything is saved in `Wiggle3DS/settings.txt`.
 
-## Bauen
+### To your phone
 
-Voraussetzung ist [devkitPro](https://devkitpro.org) mit dem Paket `3ds-dev`.
+SELECT or Share shows a QR code on top. Scan it with your phone on the same Wi-Fi and a page with all GIFs and photos opens. Hold a picture and choose "Add to Photos", or tap "Save". The web server (port 8080) only runs while this screen is open.
+
+## Files on the SD card
+
+- `Wiggle3DS/GIF/WIG_0001.gif`: a finished wigglegram, it loops forever
+- `Wiggle3DS/GIF/WIG_0001.jpg`: a photo (transition Off)
+- `Wiggle3DS/Photos/WIG_0001.w3d`: both camera images with all settings, for the gallery and to edit again
+- `Wiggle3DS/settings.txt`: the settings
+
+## Building
+
+You need [devkitPro](https://devkitpro.org) with the `3ds-dev` package.
 
 ```bash
 export DEVKITPRO=/opt/devkitpro DEVKITARM=/opt/devkitpro/devkitARM
 make
 ```
 
-Wichtig: Im Pfad zum Projektordner dürfen keine Leerzeichen sein, sonst bricht `make` ab.
+The path to the project folder must not contain spaces, or `make` fails.
 
-## Zum Testen über den Homebrew Launcher
+## Testing with the Homebrew Launcher
 
-Öffne auf dem 3DS den Homebrew Launcher und drück **Y**. Dann am Mac:
+Open the Homebrew Launcher on the 3DS and press **Y**. Then on the computer:
 
 ```bash
 /opt/devkitpro/tools/bin/3dslink Wiggle3DS.3dsx
 ```
 
-Falls der 3DS nicht automatisch gefunden wird, häng die angezeigte IP-Adresse mit `-a <IP>` an. Für den Alltag ist die CIA unten besser.
+If the 3DS isn't found, add the IP address it shows with `-a <IP>`. For everyday use the CIA below is better.
 
-## Als CIA ins HOME-Menü
+## As a CIA in the HOME Menu
 
-Fertige Versionen installierst du als CIA mit [FBI](https://github.com/lifehackerhansol/FBI). Dann startet Wiggle3DS direkt aus dem HOME-Menü, mit eigenem Icon, Banner und Ton.
+Install CIAs with [FBI](https://github.com/lifehackerhansol/FBI). Wiggle3DS then starts from the HOME Menu, with its own icon, banner and sound.
 
-Zusätzlich brauchst du `makerom` ([Project_CTR](https://github.com/3DSGuy/Project_CTR/releases)) und `bannertool` ([3ds-bannertool](https://github.com/carstene1ns/3ds-bannertool)) im `PATH`, zum Beispiel in `~/.local/bin`. Dann:
+You also need `makerom` ([Project_CTR](https://github.com/3DSGuy/Project_CTR/releases)) and `bannertool` ([3ds-bannertool](https://github.com/carstene1ns/3ds-bannertool)) in your `PATH`, for example in `~/.local/bin`. Then:
 
 ```bash
 make cia
 ```
 
-Das erzeugt `Wiggle3DS.cia`. Die Title-ID ist fest (Unique ID `0xF57E3`, Product Code `CTR-H-WGLS`). Eine neue CIA ersetzt also die installierte Version, statt ein zweites Icon anzulegen. Für eine neue Version erhöhst du `APP_VERSION` im `Makefile`.
+This makes `Wiggle3DS.cia`. The title ID is fixed (unique ID `0xF57E3`, product code `CTR-H-WGLS`), so a new CIA replaces the installed version instead of adding a second icon. For a new version, raise `APP_VERSION` in the `Makefile` (and in `source/app.h`).
 
-Vor dem Installieren musst du Wiggle3DS schließen. Deine Fotos und GIFs in `Wiggle3DS/` auf der SD-Karte bleiben dabei unverändert, auch beim Ersetzen oder Deinstallieren.
+Close Wiggle3DS before installing. Your photos and GIFs in `Wiggle3DS/` on the SD card stay as they are, also when replacing or uninstalling.
 
-### Über WLAN
+### Over Wi-Fi
 
 ```bash
 make send-cia
 ```
 
-Der Mac baut die CIA, stellt sie im WLAN bereit (Port 8080) und zeigt im Terminal einen QR-Code mit der Adresse. Auf dem 3DS öffnest du FBI, wählst **Remote Install → Scan QR Code** und hältst die Kamera auf den QR-Code. Mac und 3DS müssen im selben WLAN sein. Der Server beendet sich, sobald der 3DS die Datei geladen hat.
+The computer builds the CIA, serves it on the local network (port 8080) and shows a QR code with its address in the terminal. On the 3DS, open FBI, choose **Remote Install → Scan QR Code** and point the camera at it. Both need to be on the same Wi-Fi. The server stops once the 3DS has the file.
 
-Wenn der QR-Code im Terminal zu klein ist, öffnet `python3 tools/send-cia.py Wiggle3DS.cia --open` ihn groß im Browser.
+If the QR code in the terminal is too small, `python3 tools/send-cia.py Wiggle3DS.cia --open` opens it large in the browser.
 
-Ohne QR-Code: Wähl in FBI **Remote Install → Receive URLs over the network**. FBI zeigt dann die IP des 3DS an. Am Mac:
+Without a QR code: in FBI choose **Remote Install → Receive URLs over the network**; FBI shows the 3DS's IP. Then:
 
 ```bash
 make send-cia IP=192.168.x.y
 ```
 
-### Über die SD-Karte
+### From the SD card
 
-Kopier `Wiggle3DS.cia` auf die SD-Karte, zum Beispiel nach `cias/`. In FBI öffnest du **SD → cias**, wählst die Datei und dann **Install and delete CIA** (oder **Install CIA**).
+Copy `Wiggle3DS.cia` to the SD card, for example to `cias/`. In FBI open **SD → cias**, choose the file and **Install and delete CIA** (or **Install CIA**).
 
-## Lizenz
+### Releasing
 
-MIT, siehe [LICENSE](LICENSE). Die Teile von anderen stehen unter ihren eigenen Lizenzen (unten).
+Build with `make cia` and attach `Wiggle3DS.cia` to a new GitHub release. The QR code above needs no change: it always points to the latest release. `make qr` writes it again (`docs/install-qr.svg`), should the repository ever move.
 
-## Fremder Code
+## License
 
-- `source/qrcodegen.c/.h`: [QR Code generator](https://github.com/nayuki/QR-Code-generator) von Project Nayuki (MIT-Lizenz)
+MIT, see [LICENSE](LICENSE). The parts by others have their own licenses (below).
+
+## Code by others
+
+- `source/qrcodegen.c/.h`: [QR Code generator](https://github.com/nayuki/QR-Code-generator) by Project Nayuki (MIT license)
 - `fonts/`: [Inter](https://github.com/rsms/inter) (SIL Open Font License)
 
-## Werkzeuge
+## Tools
 
-- `tools/genfont.swift` erzeugt `source/font_data.c` aus den Inter-Schriften in `fonts/` (SIL Open Font License):
+- `tools/genfont.swift` makes `source/font_data.c` from the Inter fonts in `fonts/`:
 
   ```bash
   swift tools/genfont.swift source/font_data.c fontSmall:fonts/Inter-Medium.ttf:10.5 fontBody:fonts/Inter-SemiBold.ttf:12.5 fontTitle:fonts/Inter-Bold.ttf:19
   ```
 
-- `tools/genmeta.swift` erzeugt Icon (48x48), Banner (256x128) und Banner-Ton in `meta/` aus den Inter-Schriften:
+- `tools/genmeta.swift` makes the icon (48x48), banner (256x128) and banner sound in `meta/`:
 
   ```bash
   swift tools/genmeta.swift meta
   ```
 
-- `tools/send-cia.py` stellt die CIA im WLAN bereit (siehe oben). Den QR-Code baut `tools/qrtext.c` mit demselben qrcodegen wie die App.
+- `tools/send-cia.py` serves the CIA on the local network (see above); `tools/qrtext.c` makes its QR code with the same qrcodegen as the app. `tools/release-qr.py` writes the install QR code.
 
-- `tools/preview.c` rendert alle Screens am Mac als BMP, damit du die Oberfläche ohne 3DS prüfen kannst (Eingabe: ein rohes RGB565-Stereopaar mit 640x480):
+- `tools/preview.c` renders every screen on the computer as BMP files, to check the interface without a 3DS (input: a raw 640x480 RGB565 stereo pair):
 
   ```bash
   clang -O2 -I/opt/devkitpro/libctru/include -o preview tools/preview.c source/ui.c source/draw.c source/font_data.c source/filter.c source/qrcodegen.c source/wiggle.c -lm
-  ./preview paar.raw ausgabe/
+  ./preview pair.raw out/
   ```
