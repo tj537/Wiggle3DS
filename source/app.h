@@ -23,6 +23,7 @@ typedef struct
 {
 	int theme;
 	int filter, smooth, delayMs; // defaults for new photos; smooth SMOOTH_OFF: plain photos (JPG)
+	int strength;                // filter strength for new photos, 0..100 %
 	bool quick;                  // quick capture: save every shot right away
 	int timer;                   // self-timer in seconds, 0 = off
 	bool grid;                   // rule-of-thirds lines on the viewfinder
@@ -49,6 +50,7 @@ typedef enum
 #define DELAY_MIN 40
 #define DELAY_MAX 400
 #define DELAY_STEP 20
+#define STRENGTH_STEP 10
 
 // ---- bottom screen layout, used for drawing and touch ----
 
@@ -57,7 +59,7 @@ typedef enum
 #define HEADER_BTN_H 26
 #define HEADER_PILL_W 40
 #define HEADER_PILL_GAP 6
-typedef enum { HB_SELFIE, HB_NIGHT, HB_SHARE, HB_SETTINGS, HB_COUNT } HeaderButton;
+typedef enum { HB_DOUBLE, HB_SELFIE, HB_NIGHT, HB_SHARE, HB_SETTINGS, HB_COUNT } HeaderButton;
 
 // Home: a card of capture defaults (2x2 tiles), then the newest shots
 #define TILE_X 18
@@ -136,6 +138,9 @@ typedef struct
 	int menuSel, menuScroll; // menuScroll: pixels
 	bool camOk, selfie; // selfie: the inner camera, plain photos
 	bool camStarting;   // at start, before the camera is up
+	// Double exposure: on, and the first exposure while it waits for the second.
+	bool doubleExp, haveFirst;
+	const u16 *firstL, *firstR;
 	const u16 *liveL, *liveR;
 
 	// Gallery: thumbnails around the visible columns (the first ones also
@@ -162,7 +167,7 @@ typedef struct
 	// Review: shotNum is -1 until the shot has been saved once; savedInfo is
 	// what is on the card, to tell whether there are changes.
 	u16 *shotL, *shotR;
-	int shotNum, pivotX, pivotY, delayMs, shotFilter, shotSmooth;
+	int shotNum, pivotX, pivotY, delayMs, shotFilter, shotSmooth, shotStrength;
 	Offset offset;
 	ShotInfo savedInfo;
 	bool saving, fromGallery, aligning;

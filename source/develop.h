@@ -11,6 +11,10 @@ bool stackBegin(const u16 *left, const u16 *right);
 void stackAdd(const u16 *left, const u16 *right);
 void stackFinish(u16 *left, u16 *right);
 
+// Double exposure: the first exposure laid over `shot` like a second shot
+// on the same film (each a little darker, then screened together).
+void doubleExpose(u16 *shot, const u16 *first);
+
 // The two sensors meter on their own, so one eye often comes out a bit
 // brighter or warmer, and the wiggle flickers. Scales each channel of the
 // right eye to match the left one.

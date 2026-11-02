@@ -68,7 +68,7 @@ int main(int argc, char **argv)
 	const char *dir = argv[2];
 	filterInit();
 	uiSetTheme(0);
-	app.settings = (Settings){.filter = 4, .delayMs = 120, .fps = 20, .flash = true, .smooth = 1};
+	app.settings = (Settings){.strength = 100, .filter = 4, .delayMs = 120, .fps = 20, .flash = true, .smooth = 1};
 	app.freeBytes = 3ULL << 30;
 	app.battery = 76;
 	app.charging = true;
@@ -98,7 +98,7 @@ int main(int argc, char **argv)
 		downscale(app.grid[i], THUMB_W, THUMB_H, pair[0], i % 7 * 20, i % 7 * 10, CAM_W - 140, CAM_H - 70);
 	}
 	for (int i = 0; i < THUMB_CACHE; i++)
-		app.gridInfo[i].style = SHOT_STYLE(i % FILTER_COUNT, 1);
+		app.gridInfo[i].style = SHOT_STYLE(i % FILTER_COUNT, 1, 100);
 	app.settings.night = true;
 	app.settings.smooth = SMOOTH_OFF;
 	app.stacking = 2;
@@ -108,6 +108,13 @@ int main(int argc, char **argv)
 	app.settings.night = false;
 	app.settings.smooth = 1;
 	render(dir, "home_wiggle");
+	app.doubleExp = app.haveFirst = true;
+	app.firstL = pair[1];
+	app.firstR = pair[0];
+	app.settings.strength = 60;
+	render(dir, "home_double");
+	app.doubleExp = app.haveFirst = false;
+	app.settings.strength = 100;
 	app.filterMenu = true;
 	app.menuSel = 45;
 	app.menuScroll = 0;
@@ -156,7 +163,9 @@ int main(int argc, char **argv)
 	app.shotFilter = 7;
 	render(dir, "review_tip");
 	app.settings.tipDone = true;
+	app.shotStrength = 50;
 	render(dir, "review");
+	app.shotStrength = 100;
 	app.shotSmooth = SMOOTH_OFF;
 	render(dir, "review_photo");
 	app.shotSmooth = 0;

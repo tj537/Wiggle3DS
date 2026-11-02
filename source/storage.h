@@ -20,12 +20,15 @@ typedef struct
 {
 	s32 pivotX, pivotY, dx, dy, delayMs;
 	s32 style; // filter in bits 0-7, smoothing level in bits 8-9 (3: plain photo), bit 10: photo of version 0.0.1,
-	           // bits 11-13: frames of a boomerang of 0.0.1 (only the first is used)
+	           // bits 11-13: frames of a boomerang of 0.0.1 (only the first is used),
+	           // bits 16-22: 100 - filter strength in percent
 } ShotInfo;
 
 #define SHOT_FILTER(info) ((info)->style & 0xFF)
 #define SHOT_SMOOTH(info) (((info)->style >> 8) & 3)
-#define SHOT_STYLE(filter, smooth) ((filter) | (smooth) << 8)
+// Filter strength in bits 16-22, stored as 100 - percent so older shots are 100 %.
+#define SHOT_STRENGTH(info) (100 - (((info)->style >> 16) & 127) < 0 ? 0 : 100 - (((info)->style >> 16) & 127))
+#define SHOT_STYLE(filter, smooth, strength) ((filter) | (smooth) << 8 | (100 - (strength)) << 16)
 #define SHOT_PHOTO_OLD (1 << 10)
 #define SHOT_IS_PHOTO(info) (SHOT_SMOOTH(info) == 3 || ((info)->style & SHOT_PHOTO_OLD)) // 3: SMOOTH_OFF
 

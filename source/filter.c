@@ -138,6 +138,11 @@ static LightLock lock;
 #define UNLOCK()
 #endif
 
+#define R5(p) ((p) >> 11)
+#define G6(p) ((p) >> 5 & 63)
+#define B5(p) ((p) & 31)
+#define RGB(r, g, b) (u16)((r) << 11 | (g) << 5 | (b))
+
 static float clampf(float v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 static float luma(float r, float g, float b) { return 0.299f * r + 0.587f * g + 0.114f * b; }
 static float contrast(float v, float k) { return clampf((v - 0.5f) * k + 0.5f); }
@@ -416,7 +421,7 @@ const u16 *filterLut(int filter) { return filter > 0 && filter < FILTER_COUNT ? 
 int filterVignette(int filter) { return filter >= 0 && filter < FILTER_COUNT ? defs[filter].vignette : 0; }
 bool filterHasGlitch(int filter) { return filter > 0 && filter < FILTER_COUNT && defs[filter].glitch; }
 
-void filterApply(u16 *dst, const u16 *img, int stride, int x, int y, int w, int h, int filter, int frame)
+void filterApply(u16 *dst, const u16 *img, int stride, int x, int y, int w, int h, int filter, int frame, int strength)
 {
 	const u16 *lut = filterLut(filter);
 	for (int row = 0; row < h; row++)
@@ -427,7 +432,23 @@ void filterApply(u16 *dst, const u16 *img, int stride, int x, int y, int w, int 
 			out[col] = lut ? lut[src[col]] : src[col];
 	}
 	filterGlitch(dst, w, h, filter, frame);
-	int v = filterVignette(filter);
+	if (lut && strength < 100)
+	{
+		// Part of the way: mixed with the original.
+		int t = (strength < 0 ? 0 : strength) * 256 / 100;
+		for (int row = 0; row < h; row++)
+		{
+			const u16 *src = img + (y + row) * stride + x;
+			u16 *out = dst + row * w;
+			for (int col = 0; col < w; col++)
+			{
+				u16 a = src[col], b = out[col];
+				out[col] = RGB(R5(a) + ((R5(b) - R5(a)) * t >> 8), G6(a) + ((G6(b) - G6(a)) * t >> 8),
+				               B5(a) + ((B5(b) - B5(a)) * t >> 8));
+			}
+		}
+	}
+	int v = filterVignette(filter) * (strength < 100 ? strength : 100) / 100;
 	if (v)
 		vignetteRows(dst, w, h, v);
 }
@@ -435,10 +456,6 @@ void filterApply(u16 *dst, const u16 *img, int stride, int x, int y, int w, int 
 // ---- glitches ----
 
 #define MAXDIM 1024
-#define R5(p) ((p) >> 11)
-#define G6(p) ((p) >> 5 & 63)
-#define B5(p) ((p) & 31)
-#define RGB(r, g, b) (u16)((r) << 11 | (g) << 5 | (b))
 
 static u32 next(u32 *s)
 {

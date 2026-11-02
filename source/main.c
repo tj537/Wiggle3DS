@@ -20,6 +20,7 @@
 
 static App app;
 static u16 shotL[CAM_W * CAM_H], shotR[CAM_W * CAM_H];
+static u16 firstL[CAM_W * CAM_H], firstR[CAM_W * CAM_H]; // double exposure
 
 // Touch: where the current touch started and where it was last seen.
 static bool touching, released;
@@ -132,7 +133,7 @@ static void checkStatus(void)
 static void loadSettings(void)
 {
 	Settings *st = &app.settings;
-	*st = (Settings){.theme = 0, .filter = 0, .smooth = 0, .delayMs = 120, .quick = false, .timer = 0, .grid = false, .autoplay = true, .gifHalf = false, .fps = 20, .flash = true, .sound = true, .photoEye = 1};
+	*st = (Settings){.theme = 0, .filter = 0, .smooth = 0, .delayMs = 120, .quick = false, .timer = 0, .grid = false, .autoplay = true, .gifHalf = false, .fps = 20, .flash = true, .sound = true, .photoEye = 1, .strength = 100};
 	FILE *f = fopen(SETTINGS_PATH, "r");
 	if (!f)
 		return;
@@ -154,6 +155,7 @@ static void loadSettings(void)
 		else if (!strcmp(key, "night")) st->night = v;
 		else if (!strcmp(key, "wiggle") && !v) st->smooth = SMOOTH_OFF; // from the earlier switch
 		else if (!strcmp(key, "photo_eye")) st->photoEye = v ? 1 : 0;
+		else if (!strcmp(key, "strength") && v >= 0 && v <= 100) st->strength = v;
 		else if (!strcmp(key, "sound")) st->sound = v;
 		else if (!strcmp(key, "gif_square")) st->gifSquare = v;
 		else if (!strcmp(key, "tip_done")) st->tipDone = v;
@@ -169,7 +171,7 @@ static void saveSettings(void)
 		return;
 	fprintf(f, "theme=%d\nfilter=%d\nsmooth=%d\nspeed=%d\nquick=%d\ntimer=%d\ngrid=%d\nautoplay=%d\ngif_half=%d\nfps=%d\nflash=%d\n",
 	        st->theme, st->filter, st->smooth, st->delayMs, st->quick, st->timer, st->grid, st->autoplay, st->gifHalf, st->fps, st->flash);
-	fprintf(f, "photo_eye=%d\n", st->photoEye);
+	fprintf(f, "photo_eye=%d\nstrength=%d\n", st->photoEye, st->strength);
 	fprintf(f, "night=%d\nsound=%d\ngif_square=%d\ntip_done=%d\n", st->night, st->sound, st->gifSquare, st->tipDone);
 	fclose(f);
 }
@@ -310,7 +312,7 @@ static bool loadThumbs(int budget)
 		int filter = SHOT_FILTER(&app.gridInfo[slot]);
 		if (app.gridOk[slot] && filter && filter < FILTER_COUNT)
 		{
-			filterApply(temp, app.grid[slot], THUMB_W, 0, 0, THUMB_W, THUMB_H, filter, 0);
+			filterApply(temp, app.grid[slot], THUMB_W, 0, 0, THUMB_W, THUMB_H, filter, 0, SHOT_STRENGTH(&app.gridInfo[slot]));
 			memcpy(app.grid[slot], temp, sizeof(temp));
 		}
 		app.gridIdx[slot] = idx;
@@ -469,6 +471,22 @@ static void capture(void)
 		app.flashAt = osGetTime(); // after the extra frames, which want a clear view
 	if (!app.selfie) // a selfie has one image in both eyes
 		matchEyes(shotL, shotR);
+	if (app.doubleExp && !app.haveFirst)
+	{
+		// The first of two: kept, and shown over the viewfinder until the second.
+		memcpy(firstL, shotL, sizeof(shotL));
+		memcpy(firstR, shotR, sizeof(shotR));
+		app.haveFirst = true;
+		showToast(false, "First exposure · now the second");
+		topDirty = bottomDirty = true;
+		return;
+	}
+	if (app.haveFirst)
+	{
+		doubleExpose(shotL, firstL);
+		doubleExpose(shotR, firstR);
+		app.haveFirst = false;
+	}
 	wiggleSetImages(shotL, shotR);
 	app.shotNum = -1;
 	app.pivotX = CAM_W / 2;
@@ -476,6 +494,7 @@ static void capture(void)
 	app.delayMs = app.settings.delayMs;
 	app.shotFilter = app.settings.filter;
 	app.shotSmooth = app.selfie ? SMOOTH_OFF : app.settings.smooth;
+	app.shotStrength = app.settings.strength;
 	app.fromGallery = false;
 	app.aligning = false;
 	if (app.settings.quick || app.shotSmooth == SMOOTH_OFF)
@@ -514,7 +533,8 @@ static void openShot(int num)
 	app.shotFilter = SHOT_FILTER(&info) < FILTER_COUNT ? SHOT_FILTER(&info) : 0;
 	app.shotSmooth = SHOT_IS_PHOTO(&info) ? SMOOTH_OFF : SHOT_SMOOTH(&info);
 	// Photos of 0.0.1 had a flag of their own; boomerangs of 0.0.1 keep their first frame.
-	info.style = SHOT_STYLE(app.shotFilter, app.shotSmooth);
+	app.shotStrength = SHOT_STRENGTH(&info);
+	info.style = SHOT_STYLE(app.shotFilter, app.shotSmooth, app.shotStrength);
 	app.savedInfo = info;
 	app.fromGallery = true;
 	app.aligning = false;
@@ -545,7 +565,7 @@ static void backFromReview(void)
 static ShotInfo currentInfo(void)
 {
 	return (ShotInfo){app.pivotX, app.pivotY, app.offset.dx, app.offset.dy, app.delayMs,
-	                  SHOT_STYLE(app.shotFilter, app.shotSmooth)};
+	                  SHOT_STYLE(app.shotFilter, app.shotSmooth, app.shotStrength)};
 }
 
 // Stores the photo with its settings (over the earlier version, if any);
@@ -622,6 +642,11 @@ static void updateReview(u32 down)
 		app.delayMs -= DELAY_STEP;
 	if ((down & KEY_RIGHT) && app.delayMs < DELAY_MAX && !uiShotIsPhoto(&app))
 		app.delayMs += DELAY_STEP;
+	// L R: filter strength.
+	if ((down & KEY_L) && app.shotStrength > 0)
+		app.shotStrength -= STRENGTH_STEP;
+	if ((down & KEY_R) && app.shotStrength < 100)
+		app.shotStrength += STRENGTH_STEP;
 	if (down & KEY_UP)
 		app.shotFilter = filterNext(app.shotFilter, -1);
 	if ((down & KEY_DOWN) || (released && uiFilterPillHit(startX, startY) && uiFilterPillHit(touchX, touchY)))
@@ -916,6 +941,11 @@ static void updateFilterMenu(u32 down)
 	if (down & KEY_DOWN) sel = uiMenuMove(sel, 0, 1);
 	if (down & KEY_UP) sel = uiMenuMove(sel, 0, -1);
 	bool moved = sel != app.menuSel;
+	// L R: strength of the filter for new photos.
+	if ((down & KEY_L) && app.settings.strength > 0)
+		app.settings.strength -= STRENGTH_STEP;
+	if ((down & KEY_R) && app.settings.strength < 100)
+		app.settings.strength += STRENGTH_STEP;
 
 	// Dragging scrolls; touching a button previews it, tapping the previewed
 	// one again applies it.
@@ -998,6 +1028,12 @@ static void updateHome(u32 down)
 		openShare();
 		return;
 	}
+	if (app.haveFirst && (down & KEY_B))
+	{
+		app.haveFirst = false;
+		showToast(false, "First exposure dropped");
+		return;
+	}
 	if ((down & KEY_B) || tapped(uiAllButtonHit))
 	{
 		openGallery(0);
@@ -1014,6 +1050,13 @@ static void updateHome(u32 down)
 	if (down & KEY_Y)
 	{
 		openFilterMenu();
+		return;
+	}
+	if (header == HB_DOUBLE)
+	{
+		app.doubleExp = !app.doubleExp;
+		app.haveFirst = false;
+		showToast(false, app.doubleExp ? "Double exposure · two shots in one" : "Double exposure off");
 		return;
 	}
 	if (header == HB_SELFIE)
@@ -1084,6 +1127,8 @@ int main(void)
 	checkStatus();
 	app.shotL = shotL;
 	app.shotR = shotR;
+	app.firstL = firstL;
+	app.firstR = firstR;
 	app.shotNum = -1;
 	app.delayMs = app.settings.delayMs;
 	app.scrollTo = -1;

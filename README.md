@@ -7,6 +7,8 @@ Retro-Foto- und Wiggle-Workstation für den New 3DS (XL). Sie nimmt mit beiden A
 - **Wigglegrams:** Beide Außenkameras lösen gleichzeitig aus, du tippst auf dein Motiv, und die App macht ein wackelndes GIF, das sich um diesen Punkt dreht. Übergänge: Hard cut, Smooth, Extra smooth.
 - **Normale Fotos:** Steht die Transition auf **Off**, wird die Aufnahme ein normales Foto (JPG). Beide Kamerabilder bleiben gespeichert, beim Bearbeiten machst du aus einem Foto jederzeit wieder ein Wiggle und umgekehrt.
 - **50 Filter in Gruppen:** Classic, Color, RGB & Ghost, Tape & Screen, Data Mosh, Bits & Pixels. Die Glitch-Filter verändern das Bild selbst (RGB Split, VHS, Datamosh, Pixel Sort, Melt, Keyframe …), viele davon bewegen sich, im Sucher genauso wie im GIF.
+- **Doppelbelichtung:** zwei Aufnahmen übereinander wie auf einem Film, auch als Wiggle. Die erste liegt halb durchsichtig über dem Sucher, damit du die zweite ausrichten kannst.
+- **Filterstärke:** jeder Filter von 0 bis 100 %, mit L und R in Schritten von 10 %.
 - **Nachtmodus:** längere Belichtung, und vier Bilder werden zu einem gemittelt, das rauscht deutlich weniger. Bewegte Stellen bleiben vom ersten Bild, so gibt es keine Geisterbilder.
 - **Selfie:** die Innenkamera, gespiegelt, für normale Fotos.
 - **Sauberes 3D:** Beide Sensoren sind synchronisiert, Helligkeit und Farbe des rechten Auges werden ans linke angeglichen, damit das GIF nicht flackert.
@@ -23,13 +25,13 @@ Die App ist auf Englisch.
 Oben läuft der Sucher, unten sind deine Standards und die letzten Bilder.
 
 - **A, L, R, ZL oder ZR:** auslösen
-- **Y:** Filterauswahl. Antippen zeigt den Filter sofort im Sucher, nochmal Antippen oder A übernimmt ihn.
+- **Y:** Filterauswahl. Antippen zeigt den Filter sofort im Sucher, nochmal Antippen oder A übernimmt ihn, L R stellt die Stärke ein.
 - **X:** Nachtmodus an oder aus
 - **B oder „All“:** Galerie
 - **SELECT:** aufs Handy teilen
 - **START:** beenden
 
-Die Buttons oben, von links: Selfie, Nachtmodus, Share, Einstellungen. Die LED links zeigt den Akku: grün, orange oder rot, mit Ring beim Laden.
+Die Buttons oben, von links: Doppelbelichtung, Selfie, Nachtmodus, Share, Einstellungen. Bei der Doppelbelichtung machst du erst eine Aufnahme, dann die zweite; B verwirft die erste. Die LED links zeigt den Akku: grün, orange oder rot, mit Ring beim Laden.
 
 Die Kacheln darunter sind die Standards für neue Aufnahmen: Filter, Transition (Off heißt Foto), Speed und Quick capture. Mit Quick capture wird jede Aufnahme sofort gespeichert, ohne vorher den Bearbeiten-Screen zu öffnen.
 
@@ -37,7 +39,7 @@ Die Kacheln darunter sind die Standards für neue Aufnahmen: Filter, Transition 
 
 - **Tippen aufs Motiv:** setzt den Drehpunkt, beim ersten Mal erklärt ein Hinweis das.
 - **◀ ▶ oder der Regler:** Speed
-- **▲ ▼:** Filter
+- **▲ ▼:** Filter, **L R:** Filterstärke
 - **X:** Transition, auch auf Off, dann wird es ein Foto
 - **Y halten:** zeigt das Original ohne Filter
 - **A:** speichern, **B:** zurück

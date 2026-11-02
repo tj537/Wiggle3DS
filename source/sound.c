@@ -1,4 +1,5 @@
 #include <3ds.h>
+#include <math.h>
 #include <string.h>
 #include "sound.h"
 
@@ -31,8 +32,9 @@ static void synth(void)
 			v += (noise + thump) * env * (c ? 0.7f : 1.0f);
 		}
 		lp += (v - lp) * 0.6f; // soften the hiss
-		float s = lp * 20000;
-		pcm[i] = s > 32767 ? 32767 : s < -32768 ? -32768 : (s16)s;
+		// Driven hard into a soft limit: loud, without harsh clipping.
+		float s = tanhf(lp * 2.6f) * 32000;
+		pcm[i] = (s16)s;
 	}
 }
 
@@ -52,7 +54,8 @@ void soundInit(void)
 	ndspChnSetInterp(0, NDSP_INTERP_LINEAR);
 	ndspChnSetRate(0, RATE);
 	ndspChnSetFormat(0, NDSP_FORMAT_MONO_PCM16);
-	float mix[12] = {0.8f, 0.8f};
+	float mix[12] = {1.0f, 1.0f};
+	ndspSetMasterVol(1.0f);
 	ndspChnSetMix(0, mix);
 	ok = true;
 }

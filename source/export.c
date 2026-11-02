@@ -47,7 +47,7 @@ static bool finish(bool ok, const char *temp, const char *path, const char *othe
 }
 
 // A plain photo: the whole left eye with its filter.
-static bool makeJpg(int num, int filter)
+static bool makeJpg(int num, int filter, int strength)
 {
 	char path[64], temp[64], gif[64];
 	storagePhotoPath(num, path, sizeof(path));
@@ -55,7 +55,7 @@ static bool makeJpg(int num, int filter)
 	snprintf(temp, sizeof(temp), "%.59s.tmp", path);
 	// Into the other eye's buffer, which isn't needed.
 	u16 *src = photoRight ? imgR : imgL, *dst = photoRight ? imgL : imgR;
-	filterApply(dst, src, CAM_W, 0, 0, CAM_W, CAM_H, filter, 0);
+	filterApply(dst, src, CAM_W, 0, 0, CAM_W, CAM_H, filter, 0, strength);
 	return finish(jpegWrite(temp, dst, CAM_W, CAM_W, CAM_H, 92), temp, path, gif, num);
 }
 
@@ -79,9 +79,9 @@ static bool makeGif(int num)
 	ShotInfo info;
 	if (!storageLoad(num, imgL, imgR, &info))
 		return false;
-	int filter = SHOT_FILTER(&info) < FILTER_COUNT ? SHOT_FILTER(&info) : 0;
+	int filter = SHOT_FILTER(&info) < FILTER_COUNT ? SHOT_FILTER(&info) : 0, strength = SHOT_STRENGTH(&info);
 	if (SHOT_IS_PHOTO(&info))
-		return makeJpg(num, filter);
+		return makeJpg(num, filter, strength);
 	Crop c = crop(&info, false);
 	int pixels = c.w * c.h, mix[MAX_WIGGLE_FRAMES], n = wiggleFrames(SHOT_SMOOTH(&info), mix);
 	// A moving glitch needs every step of the loop made on its own; a still
@@ -107,18 +107,18 @@ static bool makeGif(int num)
 		{
 			int m = mix[i % n];
 			if (m < 255)
-				filterApply(bufs[i], imgL, CAM_W, c.lx, c.ly, c.w, c.h, filter, i);
+				filterApply(bufs[i], imgL, CAM_W, c.lx, c.ly, c.w, c.h, filter, i, strength);
 			if (m > 0)
 			{
-				filterApply(m < 255 ? tmp : bufs[i], imgR, CAM_W, c.rx, c.ry, c.w, c.h, filter, i);
+				filterApply(m < 255 ? tmp : bufs[i], imgR, CAM_W, c.rx, c.ry, c.w, c.h, filter, i, strength);
 				if (m < 255)
 					blendRows(bufs[i], bufs[i], tmp, pixels, m);
 			}
 		}
 	else if (ok)
 	{
-		filterApply(bufs[0], imgL, CAM_W, c.lx, c.ly, c.w, c.h, filter, 0);
-		filterApply(bufs[right], imgR, CAM_W, c.rx, c.ry, c.w, c.h, filter, 0);
+		filterApply(bufs[0], imgL, CAM_W, c.lx, c.ly, c.w, c.h, filter, 0, strength);
+		filterApply(bufs[right], imgR, CAM_W, c.rx, c.ry, c.w, c.h, filter, 0, strength);
 		for (int i = 1; i < right; i++)
 			blendRows(bufs[i], bufs[0], bufs[right], pixels, mix[i]);
 	}

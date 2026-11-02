@@ -33,4 +33,5 @@ int filterNext(int filter, int step);
 
 // Writes the w*h region at (x, y) of a row-major image to `dst` (w*h,
 // row-major) with the filter applied, vignette included.
-void filterApply(u16 *dst, const u16 *img, int stride, int x, int y, int w, int h, int filter, int frame);
+// strength: 0..100 %, mixed with the original below 100.
+void filterApply(u16 *dst, const u16 *img, int stride, int x, int y, int w, int h, int filter, int frame, int strength);

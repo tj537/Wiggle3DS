@@ -150,61 +150,73 @@ static void fitTop(int w, int h, int *dx, int *dy, int *dw, int *dh)
 	*dy = (240 - *dh) / 2;
 }
 
-// Glitch filters work on the image itself: it is scaled to screen size with
-// its colors first, glitched, and then drawn.
+// Glitch filters work on the image itself, and a filter at less than full
+// strength is mixed with the original: the image is scaled to screen size
+// with its colors first, glitched and mixed, and then drawn.
 #define GLITCH_PIXELS (400 * 240)
-static u16 glitchL[GLITCH_PIXELS], glitchR[GLITCH_PIXELS];
+static u16 glitchL[GLITCH_PIXELS], glitchR[GLITCH_PIXELS], original[GLITCH_PIXELS];
 
 static void scaleGlitched(u16 *dst, int dw, int dh, const u16 *img, int stride, int sx, int sy, int w, int h, int filter,
-                          int frame)
+                          int frame, int strength)
 {
 	const u16 *lut = filterLut(filter);
+	bool mixed = lut && strength < 100;
 	for (int y = 0; y < dh; y++)
 	{
 		const u16 *src = img + (sy + y * h / dh) * stride + sx;
-		u16 *out = dst + y * dw;
+		u16 *out = dst + y * dw, *orig = original + y * dw;
 		for (int x = 0; x < dw; x++)
 		{
 			u16 p = src[x * w / dw];
 			out[x] = lut ? lut[p] : p;
+			if (mixed)
+				orig[x] = p;
 		}
 	}
 	filterGlitch(dst, dw, dh, filter, frame);
+	if (mixed)
+		blendRows(dst, original, dst, dw * dh, strength * 255 / 100);
 }
 
-static bool glitched(int filter, int dw, int dh) { return filterHasGlitch(filter) && dw * dh <= GLITCH_PIXELS; }
+static bool layered(int filter, int strength, int dw, int dh)
+{
+	return (filterHasGlitch(filter) || (filter && strength < 100)) && dw * dh <= GLITCH_PIXELS;
+}
+
+static int vignetteAt(int filter, int strength) { return filterVignette(filter) * (strength < 100 ? strength : 100) / 100; }
 
 // drawImage with a filter's colors and vignette.
 static void drawFiltered(u16 *fb, int sw, int dx, int dy, int dw, int dh,
-                         const u16 *img, int stride, int sx, int sy, int w, int h, int filter, int radius, int frame)
+                         const u16 *img, int stride, int sx, int sy, int w, int h, int filter, int radius, int frame,
+                         int strength)
 {
-	if (glitched(filter, dw, dh))
+	if (layered(filter, strength, dw, dh))
 	{
-		scaleGlitched(glitchL, dw, dh, img, stride, sx, sy, w, h, filter, frame);
+		scaleGlitched(glitchL, dw, dh, img, stride, sx, sy, w, h, filter, frame, strength);
 		drawImage(fb, sw, dx, dy, dw, dh, glitchL, dw, 0, 0, dw, dh, NULL, radius);
 	}
 	else
 		drawImage(fb, sw, dx, dy, dw, dh, img, stride, sx, sy, w, h, filterLut(filter), radius);
-	int v = filterVignette(filter);
+	int v = vignetteAt(filter, strength);
 	if (v)
 		drawVignette(fb, sw, dx, dy, dw, dh, v, radius);
 }
 
 // One frame of the wiggle loop: the left eye mixed with the right one.
 static void drawWiggle(u16 *fb, int sw, int dx, int dy, int dw, int dh, const u16 *left, const u16 *right, int stride,
-                       int lx, int ly, int rx, int ry, int w, int h, int filter, int mix, int frame)
+                       int lx, int ly, int rx, int ry, int w, int h, int filter, int mix, int frame, int strength)
 {
 	const u16 *lut = filterLut(filter);
-	if (glitched(filter, dw, dh))
+	if (layered(filter, strength, dw, dh))
 	{
 		if (mix < 255)
 		{
-			scaleGlitched(glitchL, dw, dh, left, stride, lx, ly, w, h, filter, frame);
+			scaleGlitched(glitchL, dw, dh, left, stride, lx, ly, w, h, filter, frame, strength);
 			drawImage(fb, sw, dx, dy, dw, dh, glitchL, dw, 0, 0, dw, dh, NULL, 0);
 		}
 		if (mix > 0)
 		{
-			scaleGlitched(glitchR, dw, dh, right, stride, rx, ry, w, h, filter, frame);
+			scaleGlitched(glitchR, dw, dh, right, stride, rx, ry, w, h, filter, frame, strength);
 			drawImageAlpha(fb, sw, dx, dy, dw, dh, glitchR, dw, 0, 0, dw, dh, NULL, mix);
 		}
 	}
@@ -214,7 +226,7 @@ static void drawWiggle(u16 *fb, int sw, int dx, int dy, int dw, int dh, const u1
 			drawImage(fb, sw, dx, dy, dw, dh, left, stride, lx, ly, w, h, lut, 0);
 		drawImageAlpha(fb, sw, dx, dy, dw, dh, right, stride, rx, ry, w, h, lut, mix);
 	}
-	int v = filterVignette(filter);
+	int v = vignetteAt(filter, strength);
 	if (v)
 		drawVignette(fb, sw, dx, dy, dw, dh, v, 0);
 }
@@ -267,9 +279,11 @@ static void homeTop(App *a, u16 *fb, int eye, bool stereo)
 	int filter = a->filterMenu ? a->menuSel : a->settings.filter;
 	if (a->camOk && a->liveL)
 		drawFiltered(fb, 400, 40, 0, 320, 240, eye ? a->liveR : a->liveL, CAM_W, 0, 0, CAM_W, CAM_H, filter, 0,
-		             (int)(a->now / LIVE_GLITCH_MS));
+		             (int)(a->now / LIVE_GLITCH_MS), a->settings.strength);
 	else if (!a->camStarting)
 		drawTextCentered(fb, 400, &fontBody, 200, 112, C_DIM, 255, "Camera unavailable");
+	if (a->haveFirst) // the first exposure over the live view, to line up the second
+		drawImageAlpha(fb, 400, 40, 0, 320, 240, eye ? a->firstR : a->firstL, CAM_W, 0, 0, CAM_W, CAM_H, filterLut(filter), 110);
 	if (a->settings.grid)
 		for (int k = 1; k <= 2; k++)
 		{
@@ -320,7 +334,7 @@ static void galleryTop(App *a, u16 *fb, int eye, bool stereo)
 	int mix = stereo ? (eye ? 255 : 0) : photo ? (a->settings.photoEye ? 255 : 0) : a->playing ? frameMix(a, smooth, delay) : 0;
 	if (a->previewNum == a->shots[a->sel])
 		drawWiggle(fb, 400, 40, 0, PREVIEW_W, PREVIEW_H, a->previewL, a->previewR, PREVIEW_W, 0, 0, 0, 0, PREVIEW_W, PREVIEW_H, filter, mix,
-		           a->playing ? loopStep(a, filter, smooth, delay) : 0);
+		           a->playing ? loopStep(a, filter, smooth, delay) : 0, info ? SHOT_STRENGTH(info) : 100);
 	else if (info)
 		drawImage(fb, 400, 40, 0, PREVIEW_W, PREVIEW_H, a->grid[cur], THUMB_W, 0, 0, THUMB_W, THUMB_H, NULL, 0); // filtered already
 
@@ -331,6 +345,12 @@ static void galleryTop(App *a, u16 *fb, int eye, bool stereo)
 	else if (info)
 		overlayPill(fb, 400, 200, 212, a->playing ? tfmt("%s · %s · %d ms", filterName(filter), wiggleSmoothName(smooth), delay)
 		                                          : tfmt("%s · paused", filterName(filter)));
+}
+
+// A filter's name, with its strength when below 100 %.
+static const char *filterLabel(int filter, int strength)
+{
+	return filter && strength < 100 ? tfmt("%s %d%%", filterName(filter), strength) : filterName(filter);
 }
 
 static void reviewTop(App *a, u16 *fb, int eye, bool stereo)
@@ -346,14 +366,14 @@ static void reviewTop(App *a, u16 *fb, int eye, bool stereo)
 	                             : frameMix(a, a->shotSmooth, a->delayMs);
 	int filter = a->compare ? 0 : a->shotFilter;
 	drawWiggle(fb, 400, dx, dy, dw, dh, a->shotL, a->shotR, CAM_W, c.lx, c.ly, c.rx, c.ry, c.w, c.h, filter, mix,
-	           loopStep(a, filter, a->shotSmooth, a->delayMs));
+	           loopStep(a, filter, a->shotSmooth, a->delayMs), a->shotStrength);
 
 	if (a->shotNum >= 0)
 		overlayPillLeft(fb, 400, dx + 8, 8, tfmt("WIG_%04d", a->shotNum));
 	if (a->compare)
 		overlayPill(fb, 400, 200, 212, "Original");
 	else
-		overlayPill(fb, 400, 200, 212, uiShotIsPhoto(a) ? filterName(a->shotFilter) : stereo ? "3D view" : tfmt("%s · %s · %d ms", filterName(a->shotFilter),
+		overlayPill(fb, 400, 200, 212, uiShotIsPhoto(a) ? filterLabel(a->shotFilter, a->shotStrength) : stereo ? "3D view" : tfmt("%s · %s · %d ms", filterLabel(a->shotFilter, a->shotStrength),
 	                                                          wiggleSmoothName(a->shotSmooth), a->delayMs));
 }
 
@@ -606,7 +626,7 @@ static void headerButtons(App *a, u16 *fb)
 	for (int i = 0; i < HB_COUNT; i++)
 	{
 		int x = headerX(i);
-		bool on = (i == HB_NIGHT && a->settings.night) || (i == HB_SELFIE && a->selfie);
+		bool on = (i == HB_NIGHT && a->settings.night) || (i == HB_SELFIE && a->selfie) || (i == HB_DOUBLE && a->doubleExp);
 		if (on)
 			drawRoundRectGrad(fb, 320, x, HEADER_BTN_Y, HEADER_PILL_W, HEADER_BTN_H, HEADER_BTN_H / 2, C_ACC0, C_ACC1, 255);
 		else
@@ -615,6 +635,13 @@ static void headerButtons(App *a, u16 *fb)
 		float cx = x + HEADER_PILL_W / 2.0f, cy = HEADER_CY;
 		switch (i)
 		{
+		case HB_DOUBLE: // two exposures overlapping, the second filled once the first is taken
+			drawRing(fb, 320, cx - 3.5f, cy, 6, 1.4f, ink, 255);
+			if (a->haveFirst)
+				drawCircle(fb, 320, cx + 3.5f, cy, 6, ink, 200);
+			else
+				drawRing(fb, 320, cx + 3.5f, cy, 6, 1.4f, ink, 255);
+			break;
 		case HB_SELFIE: // forth and back: turned around
 			iconLine(fb, cx - 7, cy - 3, cx + 7, cy - 3, ink);
 			iconLine(fb, cx + 7, cy - 3, cx + 3, cy - 7, ink);
@@ -661,7 +688,8 @@ static void defaultsPanel(App *a, u16 *fb)
 	drawRoundRectOutline(fb, 320, PANEL_X, PANEL_Y, PANEL_W, PANEL_H, 14, 1, C_STROKE, 255);
 	int x, y;
 
-	tile(fb, TILE_FILTER, "Filter", filterName(st->filter));
+	tile(fb, TILE_FILTER, "Filter", st->filter && st->strength < 100 ? tfmt("%s %d%%", filterName(st->filter), st->strength)
+	                                                                 : filterName(st->filter));
 	tileRect(TILE_FILTER, &x, &y);
 	swatches(fb, x + TILE_W - 28, y + TILE_H / 2.0f, st->filter);
 
@@ -761,7 +789,7 @@ static void filterMenu(App *a, u16 *fb)
 	drawText(fb, 320, &fontTitle, 16, 9, C_TEXT, 255, "Filter");
 	int g, i;
 	menuPlace(a->menuSel, &g, &i);
-	const char *note = tfmt("%s%s", filterGroupName(g), filterMoves(a->menuSel) ? " · moves" : "");
+	const char *note = tfmt("%s%s · L R %d%%", filterGroupName(g), filterMoves(a->menuSel) ? " · moves" : "", a->settings.strength);
 	drawText(fb, 320, &fontSmall, 304 - textWidth(&fontSmall, note), 17, C_DIM, 255, note);
 	int max = uiMenuMaxScroll();
 	if (max > 0)
@@ -817,6 +845,11 @@ static void homeBottom(App *a, u16 *fb)
 
 	if (a->timerAt)
 		centeredHints(fb, 220, 1, (const char *const[]){"B"}, (const char *const[]){"Stop self-timer"});
+	else if (a->haveFirst)
+	{
+		static const char *const btns[] = {"A", "B"}, *const labels[] = {"Second exposure", "Drop the first"};
+		centeredHints(fb, 220, 2, btns, labels);
+	}
 	else
 	{
 		static const char *const btns[] = {"A", "Y", "X", "START"};
@@ -917,7 +950,7 @@ static void galleryBottom(App *a, u16 *fb)
 bool uiReviewChanged(const App *a)
 {
 	ShotInfo now = {a->pivotX, a->pivotY, a->offset.dx, a->offset.dy, a->delayMs,
-	                SHOT_STYLE(a->shotFilter, a->shotSmooth)};
+	                SHOT_STYLE(a->shotFilter, a->shotSmooth, a->shotStrength)};
 	return a->shotNum < 0 || memcmp(&now, &a->savedInfo, sizeof(now)) != 0;
 }
 
@@ -950,8 +983,9 @@ static void reviewBottom(App *a, u16 *fb)
 
 	drawShadow(fb, 320, CARD_X, CARD_Y, CARD_W, CARD_H, 10, 160);
 	const u16 *card = uiShotIsPhoto(a) && a->settings.photoEye ? a->shotR : a->shotL;
-	drawFiltered(fb, 320, CARD_X, CARD_Y, CARD_W, CARD_H, card, CAM_W, 0, 0, CAM_W, CAM_H, a->shotFilter, 10, 0);
-	const char *fl = tfmt("▲▼  %s", filterName(a->shotFilter));
+	drawFiltered(fb, 320, CARD_X, CARD_Y, CARD_W, CARD_H, card, CAM_W, 0, 0, CAM_W, CAM_H, a->shotFilter, 10, 0, a->shotStrength);
+	const char *fl = a->shotFilter && a->shotStrength < 100 ? tfmt("▲▼  %s %d%%", filterName(a->shotFilter), a->shotStrength)
+	                                                       : tfmt("▲▼  %s", filterName(a->shotFilter));
 	int fw = textWidth(&fontSmall, fl) + 20;
 	drawRoundRect(fb, 320, FILTER_PILL_X, FILTER_PILL_Y, fw, 20, 10, C_BLACK, 150);
 	drawText(fb, 320, &fontSmall, FILTER_PILL_X + 10, FILTER_PILL_Y + (20 - lineH(&fontSmall)) / 2, C_TEXT, 255, fl);
@@ -986,7 +1020,7 @@ static void reviewBottom(App *a, u16 *fb)
 	}
 	else
 	{
-		const char *hint = "Hold Y for the original";
+		const char *hint = "L R strength · hold Y for the original";
 		drawRoundRect(fb, 320, CARD_X + 8, CARD_Y + 8, textWidth(&fontSmall, hint) + 20, 20, 10, C_BLACK, 150);
 		drawText(fb, 320, &fontSmall, CARD_X + 18, CARD_Y + 8 + (20 - lineH(&fontSmall)) / 2, C_TEXT, 255, hint);
 	}
