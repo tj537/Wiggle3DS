@@ -16,10 +16,11 @@ Oder lad `Wiggle3DS.cia` vom [neuesten Release](https://github.com/tj537/Wiggle3
 
 - **Wigglegrams:** Beide Außenkameras lösen gleichzeitig aus, du tippst auf dein Motiv, und die App macht ein wackelndes GIF, das sich um diesen Punkt dreht. Übergänge: Hard cut, Smooth, Extra smooth.
 - **Normale Fotos:** Steht die Transition auf **Off**, wird die Aufnahme ein normales Foto (JPG). Beide Kamerabilder bleiben gespeichert, beim Bearbeiten machst du aus einem Foto jederzeit wieder ein Wiggle und umgekehrt.
-- **81 Filter in Gruppen:** Classic, Color, RGB & Ghost, Tape & Screen, Data Mosh, Circuit Bending, Print & Pixel, Warp, Chaos (Deep Fried, Disco, Slit Scan, Kaleido, Droste, Shatter, Toxic, Hellfire, X-Ray …). Im Filtermenü zeigt jeder Filter eine Live-Vorschau deines Sucherbilds, mit X markierst du Favoriten, die haben einen eigenen Tab (All / ★ Favs, oder SELECT). „Original“ oben bringt dich von überall in der Liste zurück zu ohne Filter. Die Glitch-Filter verändern das Bild selbst (RGB Split, VHS, Datamosh, Pixel Sort, Melt, Keyframe …), viele davon bewegen sich. Im GIF sind das zwei Wiggle-Durchläufe mit eigenem Muster, und genau die zeigt auch die Vorschau beim Bearbeiten.
+- **81 Filter in Gruppen:** Classic, Color, RGB & Ghost, Tape & Screen, Data Mosh, Circuit Bending, Print & Pixel, Warp, Chaos (Deep Fried, Disco, Slit Scan, Kaleido, Droste, Shatter, Toxic, Hellfire, X-Ray …). Im Filtermenü zeigt jeder Filter eine Live-Vorschau deines Sucherbilds, mit X markierst du Favoriten, die haben einen eigenen Tab (All / ★ Favs, oder SELECT). Das große „Original“ oben bringt dich von überall in der Liste zurück zu ohne Filter, der Würfel daneben wählt einen Zufallsfilter. Die Glitch-Filter verändern das Bild selbst (RGB Split, VHS, Datamosh, Pixel Sort, Melt, Keyframe …), viele davon bewegen sich. Im GIF sind das zwei Wiggle-Durchläufe mit eigenem Muster, und genau die zeigt auch die Vorschau beim Bearbeiten.
 - **Filterstärke:** jeder Filter von 0 bis 100 %, mit L und R in Schritten von 10 %.
 - **Automatische Belichtung und Weißabgleich:** jedes Foto bekommt eine Tonkurve und einen Weißabgleich für beide Augen: Mitteltöne Richtung Mittelgrau, eine weiche Schulter, damit Lampen und Himmel nicht ausfressen, Farben großteils Richtung neutral (nur ein Stupser, wenn nichts im Bild grau ist, etwa Wiese unter blauem Himmel).
-- **Nachtmodus, automatisch:** bleibt der Sucher dunkel, schaltet die Kamera selbst auf lange Belichtung (oben links erscheint ein Mond), und jedes Foto mittelt vier Bilder zu einem, das rauscht deutlich weniger. Bewegte Stellen bleiben vom ersten Bild, so gibt es keine Geisterbilder. Mit genug Licht geht er von selbst wieder aus; „Auto night“ in den Einstellungen schaltet ihn ganz ab.
+- **Belichtungskorrektur:** ☀ −2 bis +2 in halben Stufen, mit ZL ZR oder dem Regler oben links. Sie verschiebt die Belichtungsautomatik der Kamera, der Sucher zeigt es also schon, und die Entwicklung zielt darauf.
+- **Nachtmodus, automatisch:** bleibt der Sucher dunkel, schaltet die Kamera selbst auf lange Belichtung (im Sucher und im Belichtungsregler erscheint ein Mond), und jedes Foto mittelt vier Bilder zu einem, das rauscht deutlich weniger. Bewegte Stellen bleiben vom ersten Bild, so gibt es keine Geisterbilder. Mit genug Licht geht er von selbst wieder aus; „Auto night“ in den Einstellungen schaltet ihn ganz ab.
 - **Selfie:** die Innenkamera, gespiegelt, für normale Fotos.
 - **Sauberes 3D:** Beide Sensoren sind synchronisiert, Helligkeit und Farbe des rechten Auges werden ans linke angeglichen, damit das GIF nicht flackert.
 - **Galerie:** drei Reihen, die seitwärts scrollen, Mehrfachauswahl per Gedrückthalten, Löschen mit Rückgängig.
@@ -34,7 +35,9 @@ Die App ist auf Englisch.
 
 Oben läuft der Sucher, unten sind deine Standards und die letzten Bilder.
 
-- **A, L, R, ZL oder ZR:** auslösen
+- **A, L oder R:** auslösen
+- **ZL ZR:** Belichtung dunkler / heller
+- **▲:** Zufallsfilter
 - **Y:** Filterauswahl. Antippen zeigt den Filter sofort im Sucher, nochmal Antippen oder A übernimmt ihn, L R stellt die Stärke ein, X macht ihn zum Favoriten.
 - **B oder „All“:** Galerie
 - **▶:** zu den letzten Bildern, dort wählst du mit ◀ ▶ und öffnest mit A
@@ -42,7 +45,7 @@ Oben läuft der Sucher, unten sind deine Standards und die letzten Bilder.
 - **SELECT:** aufs Handy teilen
 - **START:** beenden
 
-Die Buttons oben, von links: Zurücksetzen auf die Standards, Selfie, Share, Einstellungen. Die LED links zeigt den Akku: grün, orange oder rot, mit Ring beim Laden, daneben ein Mond, solange der Auto-Nachtmodus läuft.
+Oben, von links: die Akku-LED (grün, orange oder rot, mit Ring beim Laden), der Belichtungsregler (◀ dunkler, ▶ heller; ein Mond statt der Sonne, solange der Auto-Nachtmodus läuft), dann Zurücksetzen auf die Standards, Selfie, Share, Einstellungen.
 
 Die Kacheln darunter sind die Standards für neue Aufnahmen: Filter, Transition (Off heißt Foto), Speed und Quick capture. Mit Quick capture wird jede Aufnahme sofort gespeichert, ohne vorher den Bearbeiten-Screen zu öffnen.
 
@@ -68,7 +71,7 @@ Das Original bleibt immer ungefiltert gespeichert, du kannst also alles später 
 
 ### Einstellungen
 
-Farbschema, Selbstauslöser, Gitterlinien, Auslöseton, Blitz-Effekt, Sucher-fps, welche Kamera für Fotos (Standard rechts), Galerie-Autoplay, GIF-Größe (voll oder halb) und GIF-Form (4:3 oder 1:1). Oben stehen die Version, die Anzahl der Aufnahmen und der freie Speicher. Alles landet in `Wiggle3DS/settings.txt`.
+Farbschema, Selbstauslöser, Gitterlinien, Auslöseton, Blitz-Effekt, Sucher-fps, welche Kamera für Fotos (Standard rechts), Galerie-Autoplay, GIF-Größe (100 % oder 50 %, für Messenger), GIF-Form (4:3 oder 1:1), 3D-Datei (aus, MPO, Side-by-side) und Video (aus, MP4). Standardmäßig entsteht nur das GIF. Die Oberfläche kommt fast überall mit Symbolen statt Wörtern aus, damit sie in jeder Sprache funktioniert. Oben stehen die Version, die Anzahl der Aufnahmen und der freie Speicher. Alles landet in `Wiggle3DS/settings.txt`.
 
 ### Aufs Handy
 
@@ -78,6 +81,7 @@ SELECT oder Share zeigt oben einen QR-Code. Scannst du ihn mit dem Handy im selb
 
 - `Wiggle3DS/GIF/WIG_0001.gif`: ein fertiges Wigglegram, es läuft endlos
 - `Wiggle3DS/GIF/WIG_0001.jpg`: ein Foto (Transition Off)
+- `Wiggle3DS/GIF/WIG_0001.mp4`, `.mpo`, `_LR.jpg`: Video und 3D-Dateien, wenn in den Einstellungen an (MPO wie die 3DS-Kamera, für 3D-TVs; `_LR.jpg` linkes Auge links, für VR-Brillen)
 - `Wiggle3DS/Photos/WIG_0001.w3d`: beide Kamerabilder mit allen Einstellungen, für die Galerie und zum neu Bearbeiten
 - `Wiggle3DS/settings.txt`: die Einstellungen
 
@@ -165,9 +169,4 @@ MIT, siehe [LICENSE](LICENSE). Die Teile von anderen stehen unter ihren eigenen 
 
 - `tools/send-cia.py` stellt die CIA im WLAN bereit (siehe oben). Den QR-Code baut `tools/qrtext.c` mit demselben qrcodegen wie die App. `tools/release-qr.py` schreibt den Installations-QR-Code.
 
-- `tools/preview.c` rendert alle Screens am Mac als BMP, damit du die Oberfläche ohne 3DS prüfen kannst (Eingabe: ein rohes RGB565-Stereopaar mit 640x480):
-
-  ```bash
-  clang -O2 -I/opt/devkitpro/libctru/include -o preview tools/preview.c source/ui.c source/draw.c source/font_data.c source/filter.c source/qrcodegen.c source/wiggle.c -lm
-  ./preview paar.raw ausgabe/
-  ```
+- `make test` baut und startet `tools/test.c` am Rechner (Filter, Auto-Entwicklung, MP4- und MPO-Writer; mit installiertem ffmpeg wird das MP4 auch dekodiert) und `tools/preview.c`, das jeden Screen aus einem erfundenen Kamerapaar (`tools/testpair.py`) nach `build/test/*.bmp` zeichnet. GitHub Actions baut und testet bei jedem Push.

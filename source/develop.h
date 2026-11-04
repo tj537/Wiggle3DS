@@ -6,7 +6,8 @@
 // Night mode: several pairs averaged into one, which cuts the sensor noise.
 // Pixels that moved (hand shake, people walking) keep the first frame, so
 // nothing ghosts. stackBegin takes the first pair, which stackFinish
-// overwrites with the result; false if there is no memory for it.
+// overwrites with the result; false if there is no memory for it. `right`
+// may be NULL (a selfie): then only the left image is worked on.
 bool stackBegin(const u16 *left, const u16 *right);
 void stackAdd(const u16 *left, const u16 *right);
 void stackFinish(u16 *left, u16 *right);
@@ -16,8 +17,9 @@ void stackFinish(u16 *left, u16 *right);
 // right eye to match the left one.
 void matchEyes(const u16 *left, u16 *right);
 
-// Light meter for the live view: mean brightness 0..255 from a sparse grid.
-int meterLuma(const u16 *img);
+// Double exposure: the first exposure laid over `shot` like a second shot
+// on the same film (each a little darker, then screened together).
+void doubleExpose(u16 *shot, const u16 *first);
 
 // Auto develop, after matchEyes: one white balance and tone curve for both
 // eyes, from the left image. White balance from the near-neutral pixels,
@@ -25,3 +27,4 @@ int meterLuma(const u16 *img);
 // exposure lifts the median toward middle gray, with a soft shoulder that
 // keeps lamps and sky from clipping. night: allows more gain.
 void autoDevelop(u16 *left, u16 *right, bool night);
+

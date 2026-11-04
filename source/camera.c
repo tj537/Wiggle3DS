@@ -174,6 +174,7 @@ void camSetFps(int fps)
 }
 
 void camSetNight(bool on)
+
 {
 	night = on;
 	if (thread)

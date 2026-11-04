@@ -46,6 +46,9 @@ void vignetteRows(u16 *img, int w, int h, int strength);
 // Text: (x, y) is the top-left of the line; returns the advance width.
 int textWidth(const Font *font, const char *text);
 int drawText(u16 *fb, int sw, const Font *font, int x, int y, u16 color, int alpha, const char *text);
+// Text into a w*h row-major image (not a screen), each font pixel `scale`
+// times as big; icons are left out.
+void drawTextImage(u16 *img, int w, int h, const Font *font, int x, int y, int scale, u16 color, int alpha, const char *text);
 int drawTextGrad(u16 *fb, int sw, const Font *font, int x, int y, u16 c0, u16 c1, const char *text);
 void drawTextCentered(u16 *fb, int sw, const Font *font, int cx, int y, u16 color, int alpha, const char *text);
 // printf into one of a few rotating static buffers.

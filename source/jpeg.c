@@ -138,7 +138,9 @@ static void scaleQuant(u8 *dst, const u8 *base, int quality)
 static float cosTab[8][8]; // [u][x]: C(u)/2 * cos((2x+1)u pi/16)
 
 // Forward DCT, quantization, then Huffman coding of one 8x8 block.
-static void codeBlock(Out *o, const float *in, const u8 *quant, int *dc, const Huff *dcH, const Huff *acH)
+// quant: the reciprocals of the quantization table (multiplying is much
+// faster than dividing on the 3DS).
+static void codeBlock(Out *o, const float *in, const float *quant, int *dc, const Huff *dcH, const Huff *acH)
 {
 	float tmp[64];
 	int coef[64];
@@ -156,7 +158,8 @@ static void codeBlock(Out *o, const float *in, const u8 *quant, int *dc, const H
 			float s = 0;
 			for (int y = 0; y < 8; y++)
 				s += tmp[y * 8 + u] * cosTab[v][y];
-			coef[v * 8 + u] = (int)lroundf(s / quant[v * 8 + u]);
+			float q = s * quant[v * 8 + u];
+			coef[v * 8 + u] = (int)(q < 0 ? q - 0.5f : q + 0.5f);
 		}
 
 	int diff = coef[0] - *dc, size = 0;
@@ -205,6 +208,12 @@ bool jpegWrite(const char *path, const u16 *img, int stride, int w, int h, int q
 	u8 ql[64], qc[64];
 	scaleQuant(ql, quantLuma, quality);
 	scaleQuant(qc, quantChroma, quality);
+	float rl[64], rc[64];
+	for (int k = 0; k < 64; k++)
+	{
+		rl[k] = 1.0f / ql[k];
+		rc[k] = 1.0f / qc[k];
+	}
 	static Huff dcL, acL, dcC, acC;
 	buildHuff(&dcL, dcLumaBits, dcVals);
 	buildHuff(&acL, acLumaBits, acLumaVals);
@@ -255,10 +264,10 @@ bool jpegWrite(const char *path, const u16 *img, int stride, int w, int h, int q
 				{
 					for (int y = 0; y < 8; y++)
 						memcpy(blk + y * 8, Y + (by * 8 + y) * 16 + bx * 8, 8 * sizeof(float));
-					codeBlock(&o, blk, ql, &dcY, &dcL, &acL);
+					codeBlock(&o, blk, rl, &dcY, &dcL, &acL);
 				}
-			codeBlock(&o, Cb, qc, &dcCb, &dcC, &acC);
-			codeBlock(&o, Cr, qc, &dcCr, &dcC, &acC);
+			codeBlock(&o, Cb, rc, &dcCb, &dcC, &acC);
+			codeBlock(&o, Cr, rc, &dcCr, &dcC, &acC);
 		}
 	if (o.nbits)
 		putBits(&o, 0x7F, 7); // pad the last byte with ones

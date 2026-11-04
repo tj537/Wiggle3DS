@@ -26,7 +26,7 @@ bool stackBegin(const u16 *left, const u16 *right)
 {
 	refs[0] = left;
 	refs[1] = right;
-	for (int e = 0; e < 2; e++)
+	for (int e = 0; e < (right ? 2 : 1); e++)
 	{
 		sums[e] = malloc(PIXELS * 3 * sizeof(u16));
 		counts[e] = malloc(PIXELS);
@@ -56,7 +56,7 @@ void stackAdd(const u16 *left, const u16 *right)
 	if (!sums[0])
 		return;
 	const u16 *frames[2] = {left, right};
-	for (int e = 0; e < 2; e++)
+	for (int e = 0; e < (sums[1] && right ? 2 : 1); e++)
 	{
 		const u16 *ref = refs[e], *src = frames[e];
 		u16 *s = sums[e];
@@ -80,8 +80,12 @@ void stackFinish(u16 *left, u16 *right)
 {
 	if (!sums[0])
 		return;
+	// Divisions are slow without a divider: one reciprocal per count instead.
+	static u32 recip[256];
+	for (int c = 1; c < 256; c++)
+		recip[c] = (16u << 16) / c;
 	u16 *out[2] = {left, right};
-	for (int e = 0; e < 2; e++)
+	for (int e = 0; e < (sums[1] && right ? 2 : 1); e++)
 	{
 		const u16 *s = sums[e];
 		const u8 *n = counts[e];
@@ -91,8 +95,9 @@ void stackFinish(u16 *left, u16 *right)
 			{
 				// Averages with 4 extra bits, rounded with an ordered dither
 				// so the gained precision shows as smooth gradients.
-				int c = n[i], d = bayer4[(y & 3) * 4 + (x & 3)];
-				int r = (s[3 * i] * 16 / c + d) >> 4, g = (s[3 * i + 1] * 16 / c + d) >> 4, b = (s[3 * i + 2] * 16 / c + d) >> 4;
+				u32 k = recip[n[i]];
+				int d = bayer4[(y & 3) * 4 + (x & 3)];
+				int r = ((s[3 * i] * k >> 16) + d) >> 4, g = ((s[3 * i + 1] * k >> 16) + d) >> 4, b = ((s[3 * i + 2] * k >> 16) + d) >> 4;
 				r = r > 31 ? 31 : r;
 				g = g > 63 ? 63 : g;
 				b = b > 31 ? 31 : b;
@@ -147,15 +152,6 @@ void matchEyes(const u16 *left, u16 *right)
 
 static int luma8(u16 p) { return (77 * ((p >> 11) << 3) + 150 * ((p >> 5 & 63) << 2) + 29 * ((p & 31) << 3)) >> 8; }
 
-int meterLuma(const u16 *img)
-{
-	u32 sum = 0, n = 0;
-	for (int y = 8; y < CAM_H; y += 16)
-		for (int x = 8; x < CAM_W; x += 16, n++)
-			sum += luma8(img[y * CAM_W + x]);
-	return n ? (int)(sum / n) : 0;
-}
-
 static float clampf(float v, float lo, float hi) { return v < lo ? lo : v > hi ? hi : v; }
 
 // Brightness 0..255 at a fraction of the histogram, from the dark end.
@@ -166,6 +162,29 @@ static int percentile(const u32 *hist, u32 total, float at)
 		if ((acc += hist[v]) > want)
 			return v;
 	return 255;
+}
+
+void doubleExpose(u16 *shot, const u16 *first)
+{
+	// Per channel: a and b at 85 %, then screen: a + b - a * b.
+	static u8 lut5[32], lut6[64];
+	static bool ready;
+	if (!ready)
+	{
+		for (int v = 0; v < 32; v++)
+			lut5[v] = v * 85 / 100;
+		for (int v = 0; v < 64; v++)
+			lut6[v] = v * 85 / 100;
+		ready = true;
+	}
+	for (int i = 0; i < PIXELS; i++)
+	{
+		u16 p = shot[i], q = first[i];
+		int ar = lut5[p >> 11], ag = lut6[p >> 5 & 63], ab = lut5[p & 31];
+		int br = lut5[q >> 11], bg = lut6[q >> 5 & 63], bb = lut5[q & 31];
+		int r = ar + br - ar * br / 31, g = ag + bg - ag * bg / 63, b = ab + bb - ab * bb / 31;
+		shot[i] = r << 11 | g << 5 | b;
+	}
 }
 
 void autoDevelop(u16 *left, u16 *right, bool night)
@@ -209,12 +228,16 @@ void autoDevelop(u16 *left, u16 *right, bool night)
 	// go far past white; the shoulder takes the rest.
 	int black = percentile(hist, total, 0.005f), median = percentile(hist, total, 0.5f), top = percentile(hist, total, 0.99f);
 	black = black > 20 ? 14 : black * 7 / 10; // lifts haze, keeps the shadows' depth
-	float gain = clampf(112.0f / (median > 4 ? median : 4), 0.8f, night ? 3.0f : 2.2f);
+	const float target = 112;
+	// Measured from the black point, which the curve takes off first.
+	float lift = (median - black > 4 ? median - black : 4) * 255.0f / (255 - black);
+	float gain = clampf(target / lift, 0.45f, night ? 3.0f : 2.2f);
 	float roof = 300.0f / (top > 1 ? top : 1);
 	if (gain > 1 && gain > roof)
 		gain = roof > 1 ? roof : 1;
 	if (gain < 1 && median < 150)
 		gain = 1; // only darkens what is clearly too bright
+
 
 	// One table per channel, in 1/16 steps for the dither.
 	static const int maxv[3] = {31, 63, 31};

@@ -13,6 +13,7 @@
 #include "share.h"
 #include "sound.h"
 #include "develop.h"
+#include "icons.h"
 
 #define PREVIEW_DELAY_MS 120 // wait before loading the selected shot's preview
 #define ALIGN_HOLD_MS 180     // a finger resting this long on the photo aligns it
@@ -20,6 +21,7 @@
 
 static App app;
 static u16 shotL[CAM_W * CAM_H], shotR[CAM_W * CAM_H];
+static u16 firstL[CAM_W * CAM_H], firstR[CAM_W * CAM_H]; // double exposure
 
 // Touch: where the current touch started and where it was last seen.
 static bool touching, released;
@@ -45,11 +47,20 @@ static int speedupOn = -1;
 static void updateSpeedup(void)
 {
 	int liveFilter = app.filterMenu ? app.menuSel : app.settings.filter;
-	int want = app.mode == MODE_REVIEW || app.mode == MODE_GALLERY || app.exporting > 0 ||
+	int want = app.mode == MODE_REVIEW || app.mode == MODE_GALLERY || app.mode == MODE_SHARE || app.exporting > 0 ||
 	           (app.mode == MODE_HOME && (filterHasGlitch(liveFilter) || app.filterMenu)); // live glitches, menu previews
 	if (want != speedupOn)
 		osSetSpeedupEnable(want);
 	speedupOn = want;
+}
+
+// Full speed for a moment of heavy work (night frames, develop, saving);
+// updateSpeedup turns it off again when it isn't needed.
+static void boost(void)
+{
+	if (speedupOn != 1)
+		osSetSpeedupEnable(true);
+	speedupOn = 1;
 }
 
 static void showToast(bool error, const char *fmt, ...)
@@ -132,7 +143,7 @@ static void checkStatus(void)
 static void loadSettings(void)
 {
 	Settings *st = &app.settings;
-	*st = (Settings){.theme = 0, .filter = 0, .smooth = 0, .delayMs = 120, .quick = false, .timer = 0, .grid = false, .autoplay = true, .gifHalf = false, .fps = 20, .flash = true, .sound = true, .photoEye = 1, .strength = 100, .night = true};
+	*st = (Settings){.theme = 0, .filter = 0, .smooth = 0, .delayMs = DELAY_DEFAULT, .quick = false, .timer = 0, .grid = false, .autoplay = true, .gifHalf = false, .fps = 20, .flash = true, .sound = true, .photoEye = 1, .strength = 100};
 	FILE *f = fopen(SETTINGS_PATH, "r");
 	if (!f)
 		return;
@@ -151,14 +162,17 @@ static void loadSettings(void)
 		else if (!strcmp(key, "gif_half")) st->gifHalf = v;
 		else if (!strcmp(key, "fps") && (v == 15 || v == 20 || v == 30)) st->fps = v;
 		else if (!strcmp(key, "flash")) st->flash = v;
-		else if (!strcmp(key, "auto_night")) st->night = v;
+		else if (!strcmp(key, "night")) st->night = v;
 		else if (!strcmp(key, "wiggle") && !v) st->smooth = SMOOTH_OFF; // from the earlier switch
 		else if (!strcmp(key, "photo_eye")) st->photoEye = v ? 1 : 0;
 		else if (!strcmp(key, "strength") && v >= 0 && v <= 100) st->strength = v;
-		else if (!strncmp(key, "fav", 3) && key[3] >= '0' && key[3] <= '2' && !key[4]) st->favorites[key[3] - '0'] = (u32)v;
+		else if (!strncmp(key, "fav", 3) && key[3] >= '0' && key[3] <= '3' && !key[4]) st->favorites[key[3] - '0'] = (u32)v;
 		else if (!strcmp(key, "sound")) st->sound = v;
 		else if (!strcmp(key, "gif_square")) st->gifSquare = v;
 		else if (!strcmp(key, "tip_done")) st->tipDone = v;
+		else if (!strcmp(key, "stereo_file") && v >= 0 && v < STEREO_COUNT) st->stereoFile = v;
+		else if (!strcmp(key, "mp4")) st->mp4 = v;
+		else if (!strcmp(key, "date_stamp")) st->dateStamp = v;
 	}
 	fclose(f);
 }
@@ -172,9 +186,10 @@ static void saveSettings(void)
 	fprintf(f, "theme=%d\nfilter=%d\nsmooth=%d\nspeed=%d\nquick=%d\ntimer=%d\ngrid=%d\nautoplay=%d\ngif_half=%d\nfps=%d\nflash=%d\n",
 	        st->theme, st->filter, st->smooth, st->delayMs, st->quick, st->timer, st->grid, st->autoplay, st->gifHalf, st->fps, st->flash);
 	fprintf(f, "photo_eye=%d\nstrength=%d\n", st->photoEye, st->strength);
-	for (int i = 0; i < 3; i++)
+	for (int i = 0; i < 4; i++)
 		fprintf(f, "fav%d=%d\n", i, (int)st->favorites[i]);
-	fprintf(f, "auto_night=%d\nsound=%d\ngif_square=%d\ntip_done=%d\n", st->night, st->sound, st->gifSquare, st->tipDone);
+	fprintf(f, "night=%d\nsound=%d\ngif_square=%d\ntip_done=%d\n", st->night, st->sound, st->gifSquare, st->tipDone);
+	fprintf(f, "stereo_file=%d\nmp4=%d\ndate_stamp=%d\n", st->stereoFile, st->mp4, st->dateStamp);
 	fclose(f);
 }
 
@@ -238,13 +253,13 @@ static void changeSetting(int row, int step)
 		st->gifSquare = !st->gifSquare;
 		exportSetSquare(st->gifSquare);
 		break;
-	case SET_NIGHT:
-		st->night = !st->night;
-		if (!st->night && app.night)
-		{
-			app.night = false;
-			camSetNight(false);
-		}
+	case SET_STEREO:
+		st->stereoFile = (st->stereoFile + step + STEREO_COUNT) % STEREO_COUNT;
+		exportSetExtras(st->stereoFile, st->mp4);
+		break;
+	case SET_MP4:
+		st->mp4 = !st->mp4;
+		exportSetExtras(st->stereoFile, st->mp4);
 		break;
 	}
 	topDirty = true;
@@ -254,6 +269,28 @@ static void updateSettings(u32 down)
 {
 	static int dragY, dragTop;
 	static bool dragged;
+	// The defaults for new shots, as tiles on top.
+	int step, startStep, tile = released ? uiTileAt(touchX, touchY, &step) : -1;
+	if (tile >= 0 && tile == uiTileAt(startX, startY, &startStep))
+	{
+		Settings *st = &app.settings;
+		if (tile == TILE_SMOOTH)
+			st->smooth = (st->smooth + 1) % (SMOOTH_OFF + 1);
+		else if (tile == TILE_SPEED)
+		{
+			st->delayMs += step * DELAY_STEP;
+			st->delayMs = st->delayMs < DELAY_MIN ? DELAY_MIN : st->delayMs > DELAY_MAX ? DELAY_MAX : st->delayMs;
+		}
+		else if (tile == TILE_QUICK)
+			st->quick = !st->quick;
+		else if (tile == TILE_DATE)
+		{
+			st->dateStamp = !st->dateStamp;
+			exportSetDateStamp(st->dateStamp);
+		}
+		saveSettings();
+		return;
+	}
 	if (down & KEY_DOWN) app.settingsSel = (app.settingsSel + 1) % SET_COUNT;
 	if (down & KEY_UP) app.settingsSel = (app.settingsSel + SET_COUNT - 1) % SET_COUNT;
 	if (down & KEY_LEFT) changeSetting(app.settingsSel, -1);
@@ -273,7 +310,7 @@ static void updateSettings(u32 down)
 		dragTop = app.settingsTop;
 		dragged = false;
 	}
-	if (touching && abs(touchY - dragY) > 10)
+	if (touching && dragY >= SET_Y - 4 && abs(touchY - dragY) > 10)
 	{
 		int top = dragTop - (touchY - dragY) / SET_ROW;
 		top = top < 0 ? 0 : top > SET_COUNT - SET_VISIBLE ? SET_COUNT - SET_VISIBLE : top;
@@ -308,7 +345,7 @@ static void updateSettings(u32 down)
 // at most `budget` per call so scrolling stays smooth; true if any loaded.
 static bool loadThumbs(int budget)
 {
-	int first = 0, last = RECENT_COUNT - 1;
+	int first = 0, last = 0; // home shows the newest shot
 	if (app.mode == MODE_GALLERY)
 	{
 		int col = (int)app.scrollX / COL_W - 1;
@@ -426,7 +463,7 @@ static void closeGallery(void)
 	app.confirmDelete = false;
 	app.picking = false;
 	setMode(MODE_HOME);
-	loadThumbs(RECENT_COUNT);
+	loadThumbs(1);
 	camResume();
 }
 
@@ -438,9 +475,51 @@ static bool saveShot(void);
 // "Hold still"; gives up waiting after a while in very low light.
 #define NIGHT_FRAMES 4
 #define NIGHT_MAX_MS 1600
+// A selfie has one image in both eyes: only the left is worked on, and
+// copied over at the end of capture.
+#define STEADY_SHAKE 14   // below this the console counts as still
+#define STEADY_WAIT_MS 1500 // waiting longer than this, it shoots anyway
+
+static void readShake(void)
+{
+	static accelVector last;
+	static bool have;
+	accelVector v;
+	hidAccelRead(&v);
+	int d = have ? abs(v.x - last.x) + abs(v.y - last.y) + abs(v.z - last.z) : 0;
+	last = v;
+	have = true;
+	d = d > 255 ? 255 : d;
+	app.shake += (d - app.shake) / 4;
+}
+
+// Night mode: waits (a short while) for the console to be still, so the
+// long exposures don't blur.
+static void waitSteady(void)
+{
+	u64 start = osGetTime();
+	app.waitSteady = true;
+	while (osGetTime() - start < STEADY_WAIT_MS)
+	{
+		hidScanInput();
+		readShake();
+		if (app.shake < STEADY_SHAKE)
+			break;
+		if (camPoll())
+		{
+			app.liveL = camLeft();
+			app.liveR = camRight();
+		}
+		topDirty = true;
+		render();
+	}
+	app.waitSteady = false;
+}
+
 static void stackNight(void)
 {
-	if (!stackBegin(shotL, shotR))
+	u16 *right = app.selfie ? NULL : shotR;
+	if (!stackBegin(shotL, right))
 		return;
 	// The live view keeps running underneath, with the progress on top.
 	app.stacking = 1;
@@ -452,7 +531,7 @@ static void stackNight(void)
 	{
 		if (camPoll())
 		{
-			stackAdd(camLeft(), camRight());
+			stackAdd(camLeft(), right ? camRight() : NULL);
 			app.stacking++;
 			app.liveL = camLeft();
 			app.liveR = camRight();
@@ -462,7 +541,7 @@ static void stackNight(void)
 		else
 			svcSleepThread(2000000LL);
 	}
-	stackFinish(shotL, shotR);
+	stackFinish(shotL, right);
 	app.stacking = 0;
 	topDirty = bottomDirty = true;
 }
@@ -476,19 +555,46 @@ static void capture(void)
 		showToast(true, "SD card is full");
 		return;
 	}
+	boost();
 	memcpy(shotL, camLeft(), sizeof(shotL));
 	memcpy(shotR, camRight(), sizeof(shotR));
+	u16 *right = app.selfie ? NULL : shotR;
 	if (app.settings.sound)
 		soundShutter();
-	if (app.night)
+	if (app.settings.night)
+	{
+		waitSteady();
+		// The frame to start from: the one after the wait.
+		memcpy(shotL, camLeft(), sizeof(shotL));
+		memcpy(shotR, camRight(), sizeof(shotR));
 		stackNight();
+	}
 	if (app.settings.flash)
 		app.flashAt = osGetTime(); // after the extra frames, which want a clear view
-	if (!app.selfie) // a selfie has one image in both eyes
-		matchEyes(shotL, shotR);
-	autoDevelop(shotL, shotR, app.night);
+	if (right)
+		matchEyes(shotL, right);
+	autoDevelop(shotL, right, app.settings.night);
+	if (app.haveFirst)
+	{
+		doubleExpose(shotL, firstL);
+		if (right)
+			doubleExpose(right, firstR);
+		app.haveFirst = false;
+	}
+	else if (app.doubleExp)
+	{
+		// The first of two: kept, and shown over the viewfinder until the second.
+		memcpy(firstL, shotL, sizeof(shotL));
+		memcpy(firstR, right ? right : shotL, sizeof(shotR));
+		app.haveFirst = true;
+		topDirty = bottomDirty = true;
+		return;
+	}
+	if (!right)
+		memcpy(shotR, shotL, sizeof(shotR));
 	wiggleSetImages(shotL, shotR);
 	app.shotNum = -1;
+	exportStampText(time(NULL), app.stampText, sizeof(app.stampText));
 	app.pivotX = CAM_W / 2;
 	app.pivotY = CAM_H / 2;
 	app.delayMs = app.settings.delayMs;
@@ -505,6 +611,8 @@ static void capture(void)
 		if (saveShot())
 		{
 			refreshGallery();
+			if (app.settings.sound)
+				soundPlay(SOUND_DONE);
 			showToast(false, "Saved · WIG_%04d", app.shotNum);
 		}
 		return;
@@ -526,6 +634,7 @@ static void openShot(int num)
 	setMode(MODE_REVIEW);
 	wiggleSetImages(shotL, shotR);
 	app.shotNum = num;
+	exportStampText(storageShotTime(num), app.stampText, sizeof(app.stampText));
 	app.pivotX = info.pivotX;
 	app.pivotY = info.pivotY;
 	app.offset = (Offset){info.dx, info.dy};
@@ -572,6 +681,7 @@ static ShotInfo currentInfo(void)
 // the GIF is made in the background.
 static bool saveShot(void)
 {
+	boost();
 	storageInit();
 	if (app.shotNum < 0)
 		app.shotNum = storageNextNumber();
@@ -595,9 +705,12 @@ static void saveFromReview(void)
 	app.saving = true;
 	bottomDirty = true;
 	render();
-	bool isNew = app.shotNum < 0;
 	if (saveShot())
-		showToast(false, isNew ? "Saved · WIG_%04d" : "Updated · WIG_%04d", app.shotNum);
+	{
+		if (app.settings.sound)
+			soundPlay(SOUND_DONE);
+		showToast(false, "Saved · WIG_%04d", app.shotNum);
+	}
 	app.saving = false;
 }
 
@@ -616,8 +729,7 @@ static void updateReview(u32 down)
 			app.confirmDiscard = false;
 		return;
 	}
-	if (!uiShotIsPhoto(&app) && touching && inRect(startX, startY, CARD_X, CARD_Y, CARD_W, CARD_H) && !uiFilterPillHit(startX, startY) &&
-	    !uiSmoothPillHit(startX, startY))
+	if (!uiShotIsPhoto(&app) && touching && inRect(startX, startY, CARD_X, CARD_Y, CARD_W, CARD_H) && !uiFilterPillHit(startX, startY))
 	{
 		int tx = touchX < CARD_X ? CARD_X : touchX >= CARD_X + CARD_W ? CARD_X + CARD_W - 1 : touchX;
 		int ty = touchY < CARD_Y ? CARD_Y : touchY >= CARD_Y + CARD_H ? CARD_Y + CARD_H - 1 : touchY;
@@ -643,18 +755,34 @@ static void updateReview(u32 down)
 		app.aligning = false;
 		topDirty = bottomDirty = true;
 	}
-	if (!uiShotIsPhoto(&app) && touching && inRect(startX, startY, SLIDER_X0 - 20, SLIDER_Y - 12, SLIDER_X1 - SLIDER_X0 + 40, 24))
+	// Speed: slow (long frames) on the left, fast on the right.
+	if (!uiShotIsPhoto(&app) && touching && inRect(startX, startY, SPEED_X0 - 30, SPEED_Y - 14, SPEED_X1 - SPEED_X0 + 54, 28))
 	{
-		int x = touchX < SLIDER_X0 ? SLIDER_X0 : touchX > SLIDER_X1 ? SLIDER_X1 : touchX;
-		int v = DELAY_MIN + (x - SLIDER_X0) * (DELAY_MAX - DELAY_MIN) / (SLIDER_X1 - SLIDER_X0);
+		int x = touchX < SPEED_X0 ? SPEED_X0 : touchX > SPEED_X1 ? SPEED_X1 : touchX;
+		int v = DELAY_MAX - (x - SPEED_X0) * (DELAY_MAX - DELAY_MIN) / (SPEED_X1 - SPEED_X0);
 		app.delayMs = (v + DELAY_STEP / 2) / DELAY_STEP * DELAY_STEP;
+	}
+	// Transition: a tap on one of the four steps.
+	int segH = 4 * SEG_H + 3 * SEG_GAP;
+	if (released && inRect(startX, startY, SEG_X - 4, SEG_Y, SEG_W + 8, segH) && inRect(touchX, touchY, SEG_X - 4, SEG_Y, SEG_W + 8, segH))
+	{
+		int i = (touchY - SEG_Y) / (SEG_H + SEG_GAP);
+		i = i > 3 ? 3 : i;
+		app.shotSmooth = i >= 3 ? SMOOTH_OFF : i;
+	}
+	// Filter strength, in steps of 10 %.
+	if (app.shotFilter && touching && inRect(startX, startY, STR_X0 - 24, SPEED_Y - 14, STR_X1 - STR_X0 + 54, 28))
+	{
+		int x = touchX < STR_X0 ? STR_X0 : touchX > STR_X1 ? STR_X1 : touchX;
+		app.shotStrength = ((x - STR_X0) * 100 / (STR_X1 - STR_X0) + 5) / 10 * 10;
 	}
 
 	Hit hit = released && uiReviewHit(startX, startY) == uiReviewHit(touchX, touchY) ? uiReviewHit(touchX, touchY) : HIT_NONE;
-	if ((down & KEY_LEFT) && app.delayMs > DELAY_MIN && !uiShotIsPhoto(&app))
-		app.delayMs -= DELAY_STEP;
-	if ((down & KEY_RIGHT) && app.delayMs < DELAY_MAX && !uiShotIsPhoto(&app))
+	// ◀ slower, ▶ faster, like the slider.
+	if ((down & KEY_LEFT) && app.delayMs < DELAY_MAX && !uiShotIsPhoto(&app))
 		app.delayMs += DELAY_STEP;
+	if ((down & KEY_RIGHT) && app.delayMs > DELAY_MIN && !uiShotIsPhoto(&app))
+		app.delayMs -= DELAY_STEP;
 	// L R: filter strength.
 	if ((down & KEY_L) && app.shotStrength > 0)
 		app.shotStrength -= STRENGTH_STEP;
@@ -664,7 +792,7 @@ static void updateReview(u32 down)
 		app.shotFilter = filterNext(app.shotFilter, -1);
 	if ((down & KEY_DOWN) || (released && uiFilterPillHit(startX, startY) && uiFilterPillHit(touchX, touchY)))
 		app.shotFilter = filterNext(app.shotFilter, 1);
-	if ((down & KEY_X) || (released && uiSmoothPillHit(startX, startY) && uiSmoothPillHit(touchX, touchY)))
+	if (down & KEY_X)
 		app.shotSmooth = (app.shotSmooth + 1) % (SMOOTH_OFF + 1);
 	if ((down & KEY_A) || hit == HIT_SAVE)
 		saveFromReview();
@@ -685,6 +813,14 @@ static void openShare(void)
 	app.shareFrom = app.mode;
 	app.filterMenu = false;
 	app.sharedCount = 0;
+	// Picked shots in the gallery: the page shows just those.
+	static int nums[MAX_SHOTS];
+	app.shareOnly = 0;
+	if (app.mode == MODE_GALLERY && app.picking)
+		for (int i = 0; i < app.shotCount; i++)
+			if (app.picked[i])
+				nums[app.shareOnly++] = app.shots[i];
+	shareSetOnly(nums, app.shareOnly);
 	app.shareOk = shareStart(app.shareUrl, sizeof(app.shareUrl));
 	if (app.shareOk)
 	{
@@ -873,7 +1009,8 @@ static void updateGallery(u32 down)
 			closeGallery();
 		return;
 	}
-	if ((down & KEY_SELECT) && !app.picking)
+	bool canShare = !app.picking || app.pickedCount;
+	if (canShare && ((down & KEY_SELECT) || (released && uiGalleryShareHit(startX, startY) && uiGalleryShareHit(touchX, touchY))))
 	{
 		openShare();
 		return;
@@ -954,6 +1091,21 @@ static void setMenuTab(bool favs)
 	uiMenuReveal(&app);
 }
 
+// A filter by chance: any but Original and the one given, from the
+// favorites when `favs` and there are at least two.
+static int randomFilter(int not, bool favs)
+{
+	static u32 seed;
+	seed = seed * 1664525u + 1013904223u + (u32)osGetTime();
+	int pool[FILTER_COUNT], n = 0;
+	for (int f = 1; f < FILTER_COUNT; f++)
+		if (f != not && (!favs || app.settings.favorites[f / 32] >> (f % 32) & 1))
+			pool[n++] = f;
+	if (favs && n < 1)
+		return randomFilter(not, false);
+	return n ? pool[(seed >> 8) % n] : not;
+}
+
 static void openFilterMenu(void)
 {
 	app.filterMenu = true;
@@ -972,10 +1124,16 @@ static void updateFilterMenu(u32 down)
 		app.menuSel = app.settings.filter = 0;
 		app.filterMenu = false;
 		saveSettings();
-		showToast(false, "Original");
 		return;
 	}
-	if ((down & KEY_SELECT) || (head >= 0 && (head == MH_FAVS) != app.menuFavs))
+	if (head == MH_RANDOM)
+	{
+		// Previewed like a tap on its tile: tap it (or A) to keep it.
+		app.menuSel = randomFilter(app.menuSel, app.menuFavs);
+		uiMenuReveal(&app);
+		return;
+	}
+	if ((down & KEY_SELECT) || ((head == MH_ALL || head == MH_FAVS) && (head == MH_FAVS) != app.menuFavs))
 	{
 		setMenuTab(!app.menuFavs);
 		return;
@@ -990,8 +1148,6 @@ static void updateFilterMenu(u32 down)
 		app.settings.favorites[sel / 32] ^= 1u << (sel % 32);
 		uiSetFavorites(app.settings.favorites);
 		saveSettings();
-		bool on = app.settings.favorites[sel / 32] >> (sel % 32) & 1;
-		showToast(false, on ? "%s · favorite" : "%s · no longer a favorite", filterName(sel));
 	}
 	if (down & KEY_RIGHT) sel = uiMenuMove(sel, 1, 0);
 	if (down & KEY_LEFT) sel = uiMenuMove(sel, -1, 0);
@@ -1042,7 +1198,6 @@ static void updateFilterMenu(u32 down)
 		app.filterMenu = false;
 }
 
-static bool tapped(bool (*hit)(int, int)) { return released && hit(startX, startY) && hit(touchX, touchY); }
 
 // Capture defaults and modes back to how the app starts the first time.
 static void resetDefaults(void)
@@ -1051,8 +1206,11 @@ static void resetDefaults(void)
 	st->filter = 0;
 	st->strength = 100;
 	st->smooth = 0;
-	st->delayMs = 120;
+	st->delayMs = DELAY_DEFAULT;
 	st->quick = false;
+	st->night = false;
+	camSetNight(false);
+	app.doubleExp = app.haveFirst = false;
 	if (app.selfie)
 	{
 		app.selfie = false;
@@ -1061,72 +1219,14 @@ static void resetDefaults(void)
 		app.liveR = camRight();
 	}
 	saveSettings();
-	showToast(false, "Back to the defaults");
 	topDirty = bottomDirty = true;
 }
 
-// The recent shots by D-pad: left and right choose, A opens, B or up leaves.
-// True if the keys were used here.
-static bool updateRecentFocus(u32 down)
-{
-	int n = app.shotCount < RECENT_COUNT ? app.shotCount : RECENT_COUNT;
-	if (down & KEY_RIGHT && app.homeFocus < n)
-		app.homeFocus = app.homeFocus == n - 1 ? RECENT_COUNT : app.homeFocus + 1;
-	else if (down & KEY_LEFT)
-		app.homeFocus = app.homeFocus == RECENT_COUNT ? n - 1 : app.homeFocus - 1;
-	else if (down & (KEY_B | KEY_UP))
-		app.homeFocus = -1;
-	else if (down & KEY_A)
-	{
-		int f = app.homeFocus;
-		app.homeFocus = -1;
-		openGallery(f == RECENT_COUNT ? 0 : f);
-	}
-	else
-		return down & (KEY_DOWN | KEY_RIGHT); // nothing else for the D-pad while here
-	return true;
-}
-
-// Auto night: when the live view stays dark, the camera goes to long
-// exposures (down to 5 fps) and shots stack several frames against the
-// noise. It goes back once frames come near full speed again, which the
-// camera only does with light to spare; then it waits a while before it
-// goes dark again, so a black wall doesn't flip it back and forth.
-#define NIGHT_ENTER_LUMA 46
-#define NIGHT_EXIT_MS 75 // smoothed frame time; 15 fps is 67 ms
-#define NIGHT_DWELL_MS 1500
-#define NIGHT_COOLDOWN_MS 8000
-static void autoNight(void)
-{
-	static u64 lastFrame, since, leftAt;
-	static int frameMs = 50;
-	u64 now = osGetTime();
-	int dt = lastFrame ? (int)(now - lastFrame) : 0;
-	lastFrame = now;
-	if (dt <= 0 || dt > 1000) // the first frame after a pause
-	{
-		since = 0;
-		return;
-	}
-	frameMs += (dt - frameMs) / 4;
-	bool want = app.night ? frameMs > NIGHT_EXIT_MS : meterLuma(app.liveL) < NIGHT_ENTER_LUMA && now - leftAt > NIGHT_COOLDOWN_MS;
-	if (!app.settings.night || want == app.night)
-	{
-		since = 0;
-		return;
-	}
-	if (!since)
-		since = now;
-	if (now - since < NIGHT_DWELL_MS)
-		return;
-	app.night = want;
-	camSetNight(want);
-	if (!want)
-		leftAt = now;
-	since = lastFrame = 0;
-	frameMs = 50;
-	bottomDirty = true;
-}
+// The middle this much nearer than the background (offset in pixels):
+// about 35 cm away. A few readings in a row before the hint comes or goes,
+// so it doesn't flicker.
+#define TOO_CLOSE_PX 48
+#define TOO_CLOSE_READINGS 3
 
 static void updateHome(u32 down)
 {
@@ -1136,8 +1236,28 @@ static void updateHome(u32 down)
 	{
 		app.liveL = camLeft();
 		app.liveR = camRight();
-		autoNight();
 		topDirty = true;
+		// A few times a second: how far the middle is apart in the two eyes,
+		// for the wiggle preview and the "too close" hint.
+		static u64 liveAt;
+		if (!app.selfie && osGetTime() - liveAt > 250)
+		{
+			static int streak; // readings in a row that disagree with the hint shown
+			int near;
+			app.liveOffset = wiggleLiveOffset(app.liveL, app.liveR, &near);
+			bool close = near > TOO_CLOSE_PX;
+			if (close != app.tooClose) // unknown (-1) counts as not close: it can only clear the hint
+			{
+				if (++streak >= TOO_CLOSE_READINGS)
+				{
+					app.tooClose = close;
+					streak = 0;
+				}
+			}
+			else
+				streak = 0;
+			liveAt = osGetTime();
+		}
 		if (app.filterMenu) // its tiles show the live view
 			bottomDirty = true;
 	}
@@ -1145,6 +1265,12 @@ static void updateHome(u32 down)
 	// Self-timer: counting down; A or B (or a tap) stops it.
 	if (app.timerAt)
 	{
+		// A tick each second, like a real self-timer.
+		static int lastLeft;
+		int left = app.timerAt > osGetTime() ? (int)((app.timerAt - osGetTime() + 999) / 1000) : 0;
+		if (left != lastLeft && left > 0 && app.settings.sound)
+			soundPlay(SOUND_TICK);
+		lastLeft = left;
 		if (down & (KEY_A | KEY_B | KEY_TOUCH))
 			app.timerAt = 0;
 		else if (osGetTime() >= app.timerAt)
@@ -1160,17 +1286,27 @@ static void updateHome(u32 down)
 		updateFilterMenu(down);
 		return;
 	}
-	if (app.homeFocus >= 0 && updateRecentFocus(down))
-		return;
-	if ((down & KEY_RIGHT) && app.shotCount)
+	// What a tap on home lands on (the filter card, shutter …), -1 if none.
+	int hit = released && uiHomeAt(startX, startY) == uiHomeAt(touchX, touchY) ? uiHomeAt(touchX, touchY) : -1;
+	// A key presses its button on screen too. Keys that leave home (Y, B,
+	// SELECT) wait a moment, so the press shows before the screen changes.
+	static int pending = -1;
+	int key = down & KEY_UP ? HH_SHUFFLE : down & KEY_DOWN ? HH_ORIGINAL : down & (KEY_A | KEY_L | KEY_R | KEY_ZL | KEY_ZR) ? HH_SHUTTER
+	          : down & KEY_Y ? HH_FILTER : down & KEY_B && !app.haveFirst ? HH_GALLERY : down & KEY_SELECT ? HH_SHARE : -1;
+	if (key >= 0)
 	{
-		app.homeFocus = 0; // into the recent shots
-		return;
+		app.keyHit = key;
+		app.keyHitAt = osGetTime();
+		if (key == HH_FILTER || key == HH_GALLERY || key == HH_SHARE)
+		{
+			pending = key;
+			return;
+		}
 	}
-	if (down & KEY_DOWN)
+	if (pending >= 0 && osGetTime() - app.keyHitAt >= 110)
 	{
-		resetDefaults();
-		return;
+		hit = pending; // as if tapped
+		pending = -1;
 	}
 	int header = released && uiHeaderAt(startX, startY) == uiHeaderAt(touchX, touchY) ? uiHeaderAt(touchX, touchY) : -1;
 	if (header == HB_SETTINGS)
@@ -1179,32 +1315,76 @@ static void updateHome(u32 down)
 		setMode(MODE_SETTINGS);
 		return;
 	}
-	if ((down & KEY_SELECT) || header == HB_SHARE)
+	if (hit == HH_SHARE)
 	{
 		openShare();
 		return;
 	}
-	if ((down & KEY_B) || tapped(uiAllButtonHit))
+	if (app.haveFirst && (down & KEY_B))
+	{
+		app.haveFirst = false; // the first exposure dropped
+		return;
+	}
+	if (hit == HH_GALLERY)
 	{
 		openGallery(0);
 		return;
 	}
-	if (down & (KEY_A | KEY_L | KEY_R | KEY_ZL | KEY_ZR))
+	// ▲ a random filter, ▼ back to Original: the two buttons beside the card.
+	if ((down & KEY_UP) || hit == HH_SHUFFLE || (((down & KEY_DOWN) || hit == HH_ORIGINAL) && app.settings.filter))
 	{
+		bool shuffle = (down & KEY_UP) || hit == HH_SHUFFLE;
+		app.settings.filter = shuffle ? randomFilter(app.settings.filter, false) : 0;
+		app.filterAt = osGetTime();
+		app.filterDir = shuffle ? 1 : -1;
+		saveSettings();
+		return;
+	}
+	if ((down & (KEY_A | KEY_L | KEY_R | KEY_ZL | KEY_ZR)) || hit == HH_SHUTTER)
+	{
+		app.shutterAt = osGetTime();
 		if (app.settings.timer && app.camOk)
 			app.timerAt = osGetTime() + app.settings.timer * 1000;
 		else
 			capture();
 		return;
 	}
-	if (down & KEY_Y)
+	if (hit == HH_FILTER)
 	{
 		openFilterMenu();
 		return;
 	}
-	if (header == HB_RESET)
+	if (header >= 0 && header != HB_SETTINGS)
 	{
-		resetDefaults();
+		app.switchAt = osGetTime(); // the switch fades in
+		app.switchIdx = header;
+	}
+	if ((down & KEY_X) && !app.settings.night)
+	{
+		app.switchAt = osGetTime();
+		app.switchIdx = HB_NIGHT;
+	}
+	if ((down & KEY_LEFT) && !app.wigglePreview)
+	{
+		app.switchAt = osGetTime();
+		app.switchIdx = HB_WIGGLE;
+	}
+	if (header == HB_WIGGLE || (down & KEY_LEFT))
+	{
+		app.wigglePreview = !app.wigglePreview;
+		return;
+	}
+	if (header == HB_DOUBLE)
+	{
+		app.doubleExp = !app.doubleExp;
+		app.haveFirst = false;
+		return;
+	}
+	if ((down & KEY_X) || header == HB_NIGHT)
+	{
+		app.settings.night = !app.settings.night;
+		camSetNight(app.settings.night);
+		saveSettings();
 		return;
 	}
 	if (header == HB_SELFIE)
@@ -1213,38 +1393,9 @@ static void updateHome(u32 down)
 		camSetSelfie(app.selfie);
 		app.liveL = camLeft();
 		app.liveR = camRight();
-		showToast(false, app.selfie ? "Selfie · plain photos" : "Back to 3D");
 		return;
 	}
 
-	if (released)
-	{
-		int recent = uiRecentAt(touchX, touchY);
-		if (recent >= 0 && recent == uiRecentAt(startX, startY) && recent < app.shotCount)
-		{
-			openGallery(recent);
-			return;
-		}
-		int step, tile = uiTileAt(touchX, touchY, &step), startStep;
-		if (tile < 0 || tile != uiTileAt(startX, startY, &startStep))
-			return;
-		Settings *st = &app.settings;
-		if (tile == TILE_FILTER)
-		{
-			openFilterMenu();
-			return;
-		}
-		if (tile == TILE_SMOOTH)
-			st->smooth = (st->smooth + 1) % (SMOOTH_OFF + 1);
-		else if (tile == TILE_SPEED)
-		{
-			st->delayMs += step * DELAY_STEP;
-			st->delayMs = st->delayMs < DELAY_MIN ? DELAY_MIN : st->delayMs > DELAY_MAX ? DELAY_MAX : st->delayMs;
-		}
-		else if (tile == TILE_QUICK)
-			st->quick = !st->quick;
-		saveSettings();
-	}
 }
 
 int main(void)
@@ -1268,6 +1419,8 @@ int main(void)
 	checkStatus();
 	app.shotL = shotL;
 	app.shotR = shotR;
+	app.firstL = firstL;
+	app.firstR = firstR;
 	app.shotNum = -1;
 	app.delayMs = app.settings.delayMs;
 	app.scrollTo = -1;
@@ -1275,23 +1428,27 @@ int main(void)
 	setMode(MODE_HOME);
 	app.modeSince = 0; // no fade on the first frame
 	app.camStarting = true;
-	app.homeFocus = -1;
 	render();
 
 	storagePurgeAll();
 	exportSetHalf(app.settings.gifHalf);
 	exportSetSquare(app.settings.gifSquare);
 	exportSetPhotoEye(app.settings.photoEye);
+	exportSetExtras(app.settings.stereoFile, app.settings.mp4);
+	exportSetDateStamp(app.settings.dateStamp);
 	exportQueueMissing(app.shots, app.shotCount);
 	exportStart();
 	soundInit();
+	HIDUSER_EnableAccelerometer();
 	osSetSpeedupEnable(false);
 
 	app.camOk = camOpen();
 	if (app.camOk)
 	{
 		camSetFps(app.settings.fps);
+		camSetNight(app.settings.night);
 		camResume();
+
 		app.liveL = camLeft();
 		app.liveR = camRight();
 	}
@@ -1301,6 +1458,8 @@ int main(void)
 	while (aptMainLoop())
 	{
 		hidScanInput();
+		readShake();
+		app.depth = osGet3DSliderState();
 		u32 down = hidKeysDown(), held = hidKeysHeld();
 		bool compare = app.mode == MODE_REVIEW && (held & KEY_Y);
 		if (compare != app.compare)
@@ -1324,7 +1483,13 @@ int main(void)
 			touchX = t.px;
 			touchY = t.py;
 		}
+		app.touched = nowTouching;
+		app.touchX = touchX;
+		app.touchY = touchY;
 		touching = nowTouching;
+		// A soft click for every tap (not for drags and long presses).
+		if (released && app.settings.sound && abs(touchX - startX) + abs(touchY - startY) < 10 && osGetTime() - touchDownAt < 600)
+			soundPlay(SOUND_CLICK);
 		// The gallery's top screen only changes with the selection, not with
 		// every touch, and redrawing it would slow down scrolling.
 		if (down || nowTouching || released)
@@ -1370,6 +1535,7 @@ int main(void)
 	shareStop();
 	exportStop();
 	soundExit();
+	HIDUSER_DisableAccelerometer();
 	ptmuExit();
 	mcuHwcExit();
 	camClose();

@@ -68,8 +68,7 @@ int main(int argc, char **argv)
 	const char *dir = argv[2];
 	filterInit();
 	uiSetTheme(0);
-	app.homeFocus = -1;
-	app.settings = (Settings){.strength = 100, .filter = 4, .delayMs = 120, .fps = 20, .flash = true, .smooth = 1};
+	app.settings = (Settings){.strength = 100, .filter = F_DREAM, .delayMs = DELAY_DEFAULT, .fps = 20, .flash = true, .smooth = 1};
 	app.freeBytes = 3ULL << 30;
 	app.battery = 76;
 	app.charging = true;
@@ -100,22 +99,32 @@ int main(int argc, char **argv)
 	}
 	for (int i = 0; i < THUMB_CACHE; i++)
 		app.gridInfo[i].style = SHOT_STYLE(i % FILTER_COUNT, 1, 100);
-	app.night = true;
+	app.settings.night = true;
+	app.doubleExp = true;
 	app.settings.smooth = SMOOTH_OFF;
 	app.stacking = 2;
 	app.stackFrames = 4;
 	render(dir, "home");
 	app.stacking = 0;
-	app.night = false;
+	app.settings.night = false;
+	app.doubleExp = false;
 	app.settings.smooth = 1;
+	app.tooClose = true;
+	app.wigglePreview = true;
 	render(dir, "home_wiggle");
-	app.settings.filter = 41;
+	app.tooClose = false;
+	app.wigglePreview = false;
+	app.waitSteady = true;
+	app.shake = 20;
+	render(dir, "home_steady");
+	app.waitSteady = false;
+	app.settings.filter = F_SIGNAL_LOSS;
 	app.settings.strength = 50;
 	render(dir, "home_long");
-	app.settings.filter = 4;
+	app.settings.filter = F_DREAM;
 	app.settings.strength = 100;
 	app.filterMenu = true;
-	app.menuSel = 53;
+	app.menuSel = F_CROSSTALK;
 	app.settings.favorites[0] = 1u << 23 | 1u << 22;
 	app.settings.favorites[1] = 1u << (53 - 32);
 	uiSetFavorites(app.settings.favorites);
@@ -126,7 +135,7 @@ int main(int argc, char **argv)
 	app.menuScroll = 0;
 	render(dir, "filter_favs");
 	uiMenuSetFavs(false);
-	app.menuSel = 76;
+	app.menuSel = F_SLIT_SCAN;
 	uiMenuReveal(&app);
 	render(dir, "filter_chaos");
 
@@ -165,6 +174,8 @@ int main(int argc, char **argv)
 
 	// Review, with a toast and while saving.
 	app.mode = MODE_REVIEW;
+	app.settings.dateStamp = true;
+	strcpy(app.stampText, "'26 11 04");
 	app.shotNum = -1;
 	app.pivotX = 300;
 	app.pivotY = 200;

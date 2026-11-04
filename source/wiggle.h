@@ -19,6 +19,12 @@ void wiggleSetImages(const u16 *left, const u16 *right);
 // Block-matches the patch around (px, py) of the left image in the right one.
 Offset wiggleMatch(int px, int py);
 Crop wiggleCrop(Offset o);
+// For the viewfinder: the offset of the middle of two camera frames, from
+// small copies, fast enough to run a few times a second. *near: how much
+// nearer the middle is than the background (the edges), in pixels of
+// offset; -1 when either has too little texture to tell. Measured against
+// the background, so it doesn't matter how the two cameras sit.
+Offset wiggleLiveOffset(const u16 *left, const u16 *right, int *near);
 
 // Smoothing levels: 0 cuts hard between the eyes, 1 adds a 50/50 blend
 // between them (L, mix, R, mix), 2 adds two blends (thirds).

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #include "camera.h"
 #include "draw.h"
@@ -9,6 +10,8 @@
 #include "filter.h"
 #include "gif.h"
 #include "jpeg.h"
+#include "mp4.h"
+#include "stereo.h"
 #include "storage.h"
 #include "wiggle.h"
 
@@ -19,7 +22,9 @@ static Thread thread;
 static LightLock lock;
 static LightEvent wake;
 static volatile bool quit;
-static volatile bool half, square, photoRight = true;
+static volatile bool half, square, photoRight = true, mp4On;
+static volatile int stereoFile;
+static volatile bool dateStamp;
 
 // Guarded by `lock`. jobs[0] is the one in progress while `working`.
 static int jobs[MAX_JOBS], jobCount;
@@ -46,6 +51,78 @@ static bool finish(bool ok, const char *temp, const char *path, const char *othe
 	return ok;
 }
 
+void exportStampText(u64 when, char *out, int size)
+{
+	time_t t = (time_t)when;
+	strftime(out, size, "'%y %m %d", gmtime(&t));
+}
+
+// The date stamp: orange digits with a reddish glow, in the bottom right
+// corner, sized to the image.
+static void stamp(u16 *img, int w, int h, int num)
+{
+	char text[16];
+	exportStampText(storageShotTime(num), text, sizeof(text));
+	int scale = w >= 400 ? 2 : 1, tw = textWidth(&fontBody, text) * scale, th = (fontBody.ascent + fontBody.descent) * scale;
+	int x = w - tw - w / 24, y = h - th - h / 24;
+	for (int dy = -1; dy <= 1; dy++)
+		for (int dx = -1; dx <= 1; dx++)
+			if (dx || dy)
+				drawTextImage(img, w, h, &fontBody, x + dx * scale, y + dy * scale, scale, COL565(200, 40, 10), 90, text);
+	drawTextImage(img, w, h, &fontBody, x, y, scale, COL565(255, 160, 50), 255, text);
+}
+
+// The extras of a shot, if set, through a temp file each like the GIF; an
+// extra that is off is removed, so none is left over from before.
+static void makeExtra(int num, int extra, bool on, bool (*write)(const char *, void *), void *arg)
+{
+	char path[64], temp[64];
+	storageExtraPath(num, extra, path, sizeof(path));
+	if (!on)
+	{
+		unlink(path);
+		return;
+	}
+	snprintf(temp, sizeof(temp), "%.59s.tmp", path);
+	finish(write(temp, arg), temp, path, path, num);
+}
+
+typedef struct
+{
+	const u16 *left, *right;
+	int stride, w, h;
+	const GifFrame *frames;
+	int count, delayMs;
+} ExtraArgs;
+
+static bool writeMpo(const char *path, void *arg)
+{
+	const ExtraArgs *e = arg;
+	return mpoWrite(path, e->left, 0, 0, e->right, 0, 0, e->stride, e->w, e->h);
+}
+
+static bool writeSbs(const char *path, void *arg)
+{
+	const ExtraArgs *e = arg;
+	return sbsWrite(path, e->left, 0, 0, e->right, 0, 0, e->stride, e->w, e->h);
+}
+
+static bool writeMp4(const char *path, void *arg)
+{
+	const ExtraArgs *e = arg;
+	return mp4Write(path, e->frames, e->count, e->w, e->h, e->delayMs);
+}
+
+// mode: 0 none, 1 MPO, 2 side by side.
+static void makeStereo(int num, ExtraArgs *e, int mode)
+{
+	makeExtra(num, EXTRA_MPO, mode == 1, writeMpo, e);
+	makeExtra(num, EXTRA_SBS, mode == 2, writeSbs, e);
+}
+
+// A selfie has the same image in both eyes: no 3D file for it.
+static int stereoFor(void) { return memcmp(imgL, imgR, sizeof(imgL)) ? stereoFile : 0; }
+
 // A plain photo: the whole left eye with its filter.
 static bool makeJpg(int num, int filter, int strength)
 {
@@ -55,7 +132,26 @@ static bool makeJpg(int num, int filter, int strength)
 	snprintf(temp, sizeof(temp), "%.59s.tmp", path);
 	// Into the other eye's buffer, which isn't needed.
 	u16 *src = photoRight ? imgR : imgL, *dst = photoRight ? imgL : imgR;
+	int stereo = stereoFor();
+	if (stereo)
+	{
+		// Both eyes filtered for the 3D file first, then the photo from them.
+		u16 *l = malloc(CAM_W * CAM_H * 2), *r = malloc(CAM_W * CAM_H * 2);
+		if (l && r)
+		{
+			filterApply(l, imgL, CAM_W, 0, 0, CAM_W, CAM_H, filter, 0, strength);
+			filterApply(r, imgR, CAM_W, 0, 0, CAM_W, CAM_H, filter, 0, strength);
+			makeStereo(num, &(ExtraArgs){l, r, CAM_W, CAM_W, CAM_H}, stereo);
+		}
+		free(l);
+		free(r);
+	}
+	else
+		makeStereo(num, &(ExtraArgs){0}, 0);
+	makeExtra(num, EXTRA_MP4, false, writeMp4, NULL); // a photo has no video
 	filterApply(dst, src, CAM_W, 0, 0, CAM_W, CAM_H, filter, 0, strength);
+	if (dateStamp)
+		stamp(dst, CAM_W, CAM_H, num);
 	return finish(jpegWrite(temp, dst, CAM_W, CAM_W, CAM_H, 92), temp, path, gif, num);
 }
 
@@ -122,6 +218,12 @@ static bool makeGif(int num)
 		for (int i = 1; i < right; i++)
 			blendRows(bufs[i], bufs[0], bufs[right], pixels, mix[i]);
 	}
+	if (ok) // the 3D file at full size, from the two eyes of the loop
+		makeStereo(num, &(ExtraArgs){bufs[0], bufs[right], c.w, c.w, c.h}, stereoFor());
+	if (ok && dateStamp) // each frame once (repeats share a buffer)
+		for (int i = 0; i < total; i++)
+			if (bufs[i])
+				stamp(bufs[i], c.w, c.h, num);
 	if (ok)
 	{
 		int gw = c.w, gh = c.h;
@@ -142,6 +244,7 @@ static bool makeGif(int num)
 		char jpg[64];
 		storagePhotoPath(num, jpg, sizeof(jpg));
 		ok = finish(gifWrite(temp, frames, total, gw, gh, info.delayMs), temp, path, jpg, num);
+		makeExtra(num, EXTRA_MP4, ok && mp4On, writeMp4, &(ExtraArgs){.frames = frames, .count = total, .w = gw, .h = gh, .delayMs = info.delayMs});
 	}
 	for (int i = 0; i < total && i < MAX_GIF_FRAMES; i++)
 		free(bufs[i]);
@@ -219,6 +322,15 @@ void exportStop(void)
 void exportSetHalf(bool h) { half = h; }
 void exportSetSquare(bool s) { square = s; }
 void exportSetPhotoEye(int eye) { photoRight = eye != 0; }
+
+void exportSetDateStamp(bool on) { dateStamp = on; }
+
+void exportSetExtras(int stereo, bool mp4)
+{
+	stereoFile = stereo;
+	mp4On = mp4;
+}
+
 
 void exportQueue(int num)
 {
