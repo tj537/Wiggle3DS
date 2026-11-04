@@ -10,6 +10,7 @@ bool camOpen(void);
 void camSetFps(int fps);
 // Night mode: longer exposures at a lower frame rate.
 void camSetNight(bool on);
+
 // Selfie: the inner camera, mirrored; camRight then returns the same image.
 void camSetSelfie(bool on);
 void camResume(void);

@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include "draw.h"
+#include "icons.h"
 
 // The framebuffers are rotated: memory runs column by column, bottom to top.
 #define PIX(fb, x, y) (fb)[(x) * 240 + (239 - (y))]
@@ -382,13 +383,21 @@ static u32 nextCode(const char **s)
 	return c;
 }
 
+// Icon characters (see icons.h): a square about as tall as the capitals.
+static bool isIcon(u32 code) { return code >= ICON_CODE && code < ICON_CODE + ICON_COUNT; }
+static float iconSize(const Font *f) { return (f->ascent + f->descent) * 0.9f; }
+static int iconAdv(const Font *f) { return (int)((iconSize(f) + 2) * 16); }
+
 int textWidth(const Font *font, const char *text)
 {
 	int adv = 0;
 	while (*text)
 	{
-		const Glyph *g = findGlyph(font, nextCode(&text));
-		if (g)
+		u32 code = nextCode(&text);
+		const Glyph *g = findGlyph(font, code);
+		if (isIcon(code))
+			adv += iconAdv(font);
+		else if (g)
 			adv += g->adv;
 	}
 	return (adv + 8) >> 4;
@@ -400,7 +409,16 @@ static int text(u16 *fb, int sw, const Font *font, int x, int y, u16 c0, u16 c1,
 	int baseline = y + font->ascent, pen = x << 4;
 	while (*s)
 	{
-		const Glyph *g = findGlyph(font, nextCode(&s));
+		u32 code = nextCode(&s);
+		if (isIcon(code))
+		{
+			float size = iconSize(font);
+			drawIcon(fb, sw, code - ICON_CODE, (pen >> 4) + 1 + size / 2, y + (font->ascent + font->descent) / 2.0f, size,
+			         c0, alpha);
+			pen += iconAdv(font);
+			continue;
+		}
+		const Glyph *g = findGlyph(font, code);
 		if (!g)
 			continue;
 		int gx = ((pen + 8) >> 4) + g->x, gy = baseline + g->y;
@@ -420,6 +438,27 @@ static int text(u16 *fb, int sw, const Font *font, int x, int y, u16 c0, u16 c1,
 int drawText(u16 *fb, int sw, const Font *font, int x, int y, u16 color, int alpha, const char *s)
 {
 	return text(fb, sw, font, x, y, color, color, alpha, s);
+}
+
+void drawTextImage(u16 *img, int w, int h, const Font *font, int x, int y, int scale, u16 color, int alpha, const char *s)
+{
+	int baseline = y + font->ascent * scale, pen = x << 4;
+	while (*s)
+	{
+		const Glyph *g = findGlyph(font, nextCode(&s));
+		if (!g)
+			continue;
+		int gx = ((pen + 8) >> 4) + g->x * scale, gy = baseline + g->y * scale;
+		const u8 *bm = font->bitmap + g->offset;
+		for (int row = 0; row < g->h * scale; row++)
+			for (int col = 0; col < g->w * scale; col++)
+			{
+				int px = gx + col, py = gy + row, a = bm[(row / scale) * g->w + col / scale] * alpha / 255;
+				if (a && px >= 0 && py >= 0 && px < w && py < h)
+					img[py * w + px] = blend(img[py * w + px], color, a);
+			}
+		pen += g->adv * scale;
+	}
 }
 
 int drawTextGrad(u16 *fb, int sw, const Font *font, int x, int y, u16 c0, u16 c1, const char *s)
@@ -465,7 +504,28 @@ int drawHint(u16 *fb, int sw, int x, int y, const char *button, const char *labe
 	int bw = badgeWidth(button), lh = fontSmall.ascent + fontSmall.descent;
 	int cy = y + lh / 2;
 	drawRoundRect(fb, sw, x, cy - BADGE_R, bw, BADGE_R * 2, BADGE_R, color, alpha);
-	drawTextCentered(fb, sw, &fontSmall, x + bw / 2, cy - lh / 2, COL565(14, 14, 22), alpha, button);
+	// Centered on the ink: across, the glyphs' pixels (not their advance);
+	// up and down, the capitals (about 73 % of the ascent).
+	int capH = fontSmall.ascent * 73 / 100, left = 1 << 20, right = -(1 << 20), pen = 0;
+	for (const char *s = button; *s;)
+	{
+		u32 code = nextCode(&s);
+		const Glyph *g = findGlyph(&fontSmall, code);
+		if (isIcon(code))
+		{
+			left = left < pen >> 4 ? left : pen >> 4;
+			pen += iconAdv(&fontSmall);
+			right = right > (pen >> 4) - 2 ? right : (pen >> 4) - 2;
+		}
+		else if (g)
+		{
+			int gl = ((pen + 8) >> 4) + g->x;
+			left = left < gl ? left : gl;
+			right = right > gl + g->w ? right : gl + g->w;
+			pen += g->adv;
+		}
+	}
+	drawText(fb, sw, &fontSmall, x + bw / 2 - (left + right) / 2, cy - fontSmall.ascent + (capH + 1) / 2, COL565(14, 14, 22), alpha, button);
 	if (label && *label)
 		drawText(fb, sw, &fontSmall, x + bw + 5, y, color, alpha, label);
 	return hintWidth(button, label);

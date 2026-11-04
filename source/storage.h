@@ -8,6 +8,7 @@
 #define DIR_GIF DIR_ROOT "/GIF"
 #define DIR_PHOTO DIR_ROOT "/Photos"
 #define DIR_PHOTO_OLD DIR_ROOT "/Fotos" // name used by earlier versions
+#define DIR_CACHE DIR_ROOT "/Cache"      // small JPGs for the share page, made on demand
 
 // Aligned crops, downscaled: a small one for the grid, a screen-sized one
 // for the top screen preview (both eyes).
@@ -39,6 +40,13 @@ int storageNextNumber(void);
 void storageGifPath(int num, char *buf, size_t size);
 // Plain photos (wiggle off) are JPGs next to the GIFs: GIF/WIG_0001.jpg.
 void storagePhotoPath(int num, char *buf, size_t size);
+// Files made on top if set: the MP4 video and the 3D files (MPO, side by
+// side), next to the GIF: GIF/WIG_0001.mp4, .mpo, _LR.jpg.
+typedef enum { EXTRA_MP4, EXTRA_MPO, EXTRA_SBS, EXTRA_COUNT } Extra;
+void storageExtraPath(int num, int extra, char *buf, size_t size);
+// The share page's small picture of a shot: Cache/WIG_0001.jpg.
+void storageCachePath(int num, char *buf, size_t size);
+
 
 // Also stores the thumbnail and previews, so the gallery can show and
 // wiggle shots without loading the full images.
@@ -58,3 +66,4 @@ void storagePurge(int num); // gone for good
 void storagePurgeAll(void); // at start: deletions left from last time
 u64 storageFreeBytes(void);
 u64 storageShotTime(int num); // last saved, local time in seconds since 1970; 0 if unknown
+u64 storageFileTime(const char *path); // the same for any file

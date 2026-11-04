@@ -13,6 +13,8 @@ typedef enum
 	G_INTERLACE, G_CIRCUIT, G_PRISM, G_GHOST, G_TRAILS, G_BLEED, G_WOBBLE, G_SIGNAL, G_HOLO, G_BROADCAST,
 	G_WORN, G_ANAGLYPH, G_SMEAR, G_SWIRL, G_COMPRESS, G_DRIFT, G_KEYFRAME, G_CROSSTALK, G_STUCK, G_SYNC,
 	G_CLOCK, G_XOR, G_HALFTONE, G_RISO, G_ONEBIT, G_EDGES, G_FEEDBACK,
+	G_FRIED, G_KALEIDO, G_MIRROR, G_SLIT, G_SHATTER, G_DISCO, G_DROSTE, G_SCRAMBLE,
+	G_NEON, G_RAIN, G_LED, G_DOUBLE, G_ZOOM, G_LIQUID, G_RIPPLE, G_FISHEYE,
 } Glitch;
 
 // Moving glitches get a new pattern every frame of the loop (see
@@ -28,79 +30,109 @@ typedef struct
 } FilterDef;
 
 static const FilterDef defs[FILTER_COUNT] = {
-	{"Original", 0, 0},
-	{"Vivid", 0, 0},
-	{"Warm", 0, 0},
-	{"Cool", 0, 0},
-	{"Dream", 60, 0},
-	{"Cinema", 70, 0},
-	{"Vintage", 90, 0},
-	{"Lomo", 170, 0},
-	{"Sepia", 80, 0},
-	{"Mono", 0, 0},
-	{"Noir", 130, 0},
+	[F_ORIGINAL] = {"Original", 0, 0},
+	[F_VIVID] = {"Vivid", 0, 0},
+	[F_WARM] = {"Warm", 0, 0},
+	[F_COOL] = {"Cool", 0, 0},
+	[F_DREAM] = {"Dream", 60, 0},
+	[F_CINEMA] = {"Cinema", 70, 0},
+	[F_VINTAGE] = {"Vintage", 90, 0},
+	[F_LOMO] = {"Lomo", 170, 0},
+	[F_SEPIA] = {"Sepia", 80, 0},
+	[F_MONO] = {"Mono", 0, 0},
+	[F_NOIR] = {"Noir", 130, 0},
 	// more colors
-	{"Chrome", 40, 0},
-	{"Bleach", 60, 0},
-	{"Cross", 50, 0},
-	{"Pastel", 0, 0},
-	{"Duotone", 0, 0},
-	{"Infrared", 40, 0},
-	{"Thermal", 0, 0},
-	{"Acid", 0, 0},
-	{"Solar", 0, 0},
-	{"Game Boy", 0, 0},
-	{"Bent", 0, 0},
+	[F_CHROME] = {"Chrome", 40, 0},
+	[F_BLEACH] = {"Bleach", 60, 0},
+	[F_CROSS] = {"Cross", 50, 0},
+	[F_PASTEL] = {"Pastel", 0, 0},
+	[F_DUOTONE] = {"Duotone", 0, 0},
+	[F_INFRARED] = {"Infrared", 40, 0},
+	[F_THERMAL] = {"Thermal", 0, 0},
+	[F_ACID] = {"Acid", 0, 0},
+	[F_SOLAR] = {"Solar", 0, 0},
+	[F_GAME_BOY] = {"Game Boy", 0, 0},
+	[F_BENT] = {"Bent", 0, 0},
 	// glitches
-	{"RGB Split", 0, G_CHROMA, MOVES},
-	{"VHS", 90, G_VHS, MOVES},
-	{"Datamosh", 0, G_MOSH, MOVES},
-	{"Pixel Sort", 0, G_SORT},
-	{"Tear", 0, G_TEAR, MOVES},
-	{"Mosaic", 0, G_MOSAIC},
-	{"CRT", 150, G_CRT},
-	{"Bit Rot", 0, G_BITROT, MOVES},
-	{"Echo", 40, G_ECHO},
-	{"Night Vision", 200, G_NIGHT, MOVES},
-	{"Melt", 0, G_MELT, MOVES},
-	{"Interlace", 0, G_INTERLACE},
-	{"Circuit", 0, G_CIRCUIT, MOVES},
-	{"Prism", 0, G_PRISM, MOVES},
-	{"Ghost", 30, G_GHOST, MOVES},
-	{"Trails", 0, G_TRAILS},
-	{"Bleed", 60, G_BLEED},
-	{"Wobble", 0, G_WOBBLE, MOVES},
-	{"Signal Loss", 0, G_SIGNAL, MOVES},
-	{"Hologram", 120, G_HOLO, MOVES},
-	{"Broadcast", 0, G_BROADCAST, MOVES},
-	{"VHS Worn", 140, G_WORN, MOVES},
-	{"Anaglyph", 0, G_ANAGLYPH},
-	{"Smear", 0, G_SMEAR, MOVES},
-	{"Swirl", 0, G_SWIRL, MOVES},
-	{"Compress", 0, G_COMPRESS},
-	{"Drift", 0, G_DRIFT, MOVES},
-	{"Keyframe", 0, G_KEYFRAME, MOVES},
+	[F_RGB_SPLIT] = {"RGB Split", 0, G_CHROMA, MOVES},
+	[F_VHS] = {"VHS", 90, G_VHS, MOVES},
+	[F_DATAMOSH] = {"Datamosh", 0, G_MOSH, MOVES},
+	[F_PIXEL_SORT] = {"Pixel Sort", 0, G_SORT},
+	[F_TEAR] = {"Tear", 0, G_TEAR, MOVES},
+	[F_MOSAIC] = {"Mosaic", 0, G_MOSAIC},
+	[F_CRT] = {"CRT", 150, G_CRT},
+	[F_BIT_ROT] = {"Bit Rot", 0, G_BITROT, MOVES},
+	[F_ECHO] = {"Echo", 40, G_ECHO},
+	[F_NIGHT_VISION] = {"Night Vision", 200, G_NIGHT, MOVES},
+	[F_MELT] = {"Melt", 0, G_MELT, MOVES},
+	[F_INTERLACE] = {"Interlace", 0, G_INTERLACE},
+	[F_CIRCUIT] = {"Circuit", 0, G_CIRCUIT, MOVES},
+	[F_PRISM] = {"Prism", 0, G_PRISM, MOVES},
+	[F_GHOST] = {"Ghost", 30, G_GHOST, MOVES},
+	[F_TRAILS] = {"Trails", 0, G_TRAILS},
+	[F_BLEED] = {"Bleed", 60, G_BLEED},
+	[F_WOBBLE] = {"Wobble", 0, G_WOBBLE, MOVES},
+	[F_SIGNAL_LOSS] = {"Signal Loss", 0, G_SIGNAL, MOVES},
+	[F_HOLOGRAM] = {"Hologram", 120, G_HOLO, MOVES},
+	[F_BROADCAST] = {"Broadcast", 0, G_BROADCAST, MOVES},
+	[F_VHS_WORN] = {"VHS Worn", 140, G_WORN, MOVES},
+	[F_ANAGLYPH] = {"Anaglyph", 0, G_ANAGLYPH},
+	[F_SMEAR] = {"Smear", 0, G_SMEAR, MOVES},
+	[F_SWIRL] = {"Swirl", 0, G_SWIRL, MOVES},
+	[F_COMPRESS] = {"Compress", 0, G_COMPRESS},
+	[F_DRIFT] = {"Drift", 0, G_DRIFT, MOVES},
+	[F_KEYFRAME] = {"Keyframe", 0, G_KEYFRAME, MOVES},
 	// circuit bending
-	{"Gray Code", 0, 0},
-	{"Overflow", 0, 0},
-	{"Reverse", 0, 0},
-	{"Crosstalk", 0, G_CROSSTALK},
-	{"Stuck Bits", 0, G_STUCK},
-	{"Sync Loss", 0, G_SYNC, MOVES},
-	{"Clock", 0, G_CLOCK, MOVES},
-	{"XOR", 0, G_XOR},
+	[F_GRAY_CODE] = {"Gray Code", 0, 0},
+	[F_OVERFLOW] = {"Overflow", 0, 0},
+	[F_REVERSE] = {"Reverse", 0, 0},
+	[F_CROSSTALK] = {"Crosstalk", 0, G_CROSSTALK},
+	[F_STUCK_BITS] = {"Stuck Bits", 0, G_STUCK},
+	[F_SYNC_LOSS] = {"Sync Loss", 0, G_SYNC, MOVES},
+	[F_CLOCK] = {"Clock", 0, G_CLOCK, MOVES},
+	[F_XOR] = {"XOR", 0, G_XOR},
 	// more colors
-	{"Cyanotype", 50, 0},
-	{"Matte", 30, 0},
-	{"Golden", 60, 0},
-	{"Pop", 0, 0},
+	[F_CYANOTYPE] = {"Cyanotype", 50, 0},
+	[F_MATTE] = {"Matte", 30, 0},
+	[F_GOLDEN] = {"Golden", 60, 0},
+	[F_POP] = {"Pop", 0, 0},
 	// print and pixel
-	{"CGA", 0, 0},
-	{"Halftone", 0, G_HALFTONE},
-	{"Riso", 0, G_RISO},
-	{"1-Bit", 0, G_ONEBIT},
-	{"Edges", 0, G_EDGES},
-	{"Feedback", 0, G_FEEDBACK},
+	[F_CGA] = {"CGA", 0, 0},
+	[F_HALFTONE] = {"Halftone", 0, G_HALFTONE},
+	[F_RISO] = {"Riso", 0, G_RISO},
+	[F_ONE_BIT] = {"1-Bit", 0, G_ONEBIT},
+	[F_EDGES] = {"Edges", 0, G_EDGES},
+	[F_FEEDBACK] = {"Feedback", 0, G_FEEDBACK},
+	// chaos
+	[F_TOXIC] = {"Toxic", 60, 0},
+	[F_HELLFIRE] = {"Hellfire", 120, 0},
+	[F_X_RAY] = {"X-Ray", 80, 0},
+	[F_NEGATIVE] = {"Negative", 0, 0},
+	[F_VAPORWAVE] = {"Vaporwave", 40, 0},
+	[F_DEEP_FRIED] = {"Deep Fried", 0, G_FRIED},
+	[F_KALEIDO] = {"Kaleido", 0, G_KALEIDO},
+	[F_MIRROR] = {"Mirror", 0, G_MIRROR},
+	[F_SLIT_SCAN] = {"Slit Scan", 0, G_SLIT, MOVES},
+	[F_SHATTER] = {"Shatter", 0, G_SHATTER, MOVES},
+	[F_DISCO] = {"Disco", 0, G_DISCO, MOVES},
+	[F_DROSTE] = {"Droste", 70, G_DROSTE},
+	[F_SCRAMBLE] = {"Scramble", 0, G_SCRAMBLE, MOVES},
+	// trip
+	[F_BUBBLEGUM] = {"Bubblegum", 0, 0},
+	[F_BLOOD_MOON] = {"Blood Moon", 150, 0},
+	[F_SYNTHWAVE] = {"Synthwave", 60, 0},
+	[F_CURSED] = {"Cursed", 110, 0},
+	[F_PSYCHEDELIC] = {"Psychedelic", 0, 0},
+	[F_ECTOPLASM] = {"Ectoplasm", 90, 0},
+	[F_EIGHT_COLORS] = {"8 Colors", 0, 0},
+	[F_NEON] = {"Neon", 0, G_NEON},
+	[F_PIXEL_RAIN] = {"Pixel Rain", 60, G_RAIN, MOVES},
+	[F_LED_WALL] = {"LED Wall", 0, G_LED},
+	[F_DOUBLE_VISION] = {"Double Vision", 30, G_DOUBLE},
+	[F_ZOOM_BLUR] = {"Zoom Blur", 40, G_ZOOM},
+	[F_LIQUID] = {"Liquid", 0, G_LIQUID, MOVES},
+	[F_RIPPLE] = {"Ripple", 0, G_RIPPLE, MOVES},
+	[F_FISHEYE] = {"Fisheye", 120, G_FISHEYE},
 };
 
 // The filter menu's groups, in order; every filter is in one.
@@ -110,14 +142,17 @@ static const struct
 	int count;
 	u8 items[16];
 } groups[] = {
-	{"Classic", 11, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}},
-	{"Color", 13, {11, 12, 13, 14, 15, 16, 17, 18, 19, 58, 59, 60, 61}},
-	{"RGB & Ghost", 7, {22, 35, 36, 37, 30, 44, 67}},
-	{"Tape & Screen", 8, {23, 43, 38, 39, 28, 33, 41, 31}},
-	{"Data Mosh", 8, {24, 45, 46, 49, 47, 48, 40, 42}},
-	{"Circuit Bending", 11, {21, 34, 50, 51, 52, 53, 54, 55, 56, 57, 29}},
-	{"Print & Pixel", 7, {63, 64, 65, 62, 20, 27, 66}},
-	{"Warp", 3, {25, 26, 32}},
+	{"Classic", 11, {F_ORIGINAL, F_VIVID, F_WARM, F_COOL, F_DREAM, F_CINEMA, F_VINTAGE, F_LOMO, F_SEPIA, F_MONO, F_NOIR}},
+	{"Color", 13, {F_CHROME, F_BLEACH, F_CROSS, F_PASTEL, F_DUOTONE, F_INFRARED, F_THERMAL, F_ACID, F_SOLAR, F_CYANOTYPE, F_MATTE, F_GOLDEN, F_POP}},
+	{"RGB & Ghost", 7, {F_RGB_SPLIT, F_PRISM, F_GHOST, F_TRAILS, F_ECHO, F_ANAGLYPH, F_FEEDBACK}},
+	{"Tape & Screen", 8, {F_VHS, F_VHS_WORN, F_BLEED, F_WOBBLE, F_CRT, F_INTERLACE, F_HOLOGRAM, F_NIGHT_VISION}},
+	{"Data Mosh", 8, {F_DATAMOSH, F_SMEAR, F_SWIRL, F_KEYFRAME, F_COMPRESS, F_DRIFT, F_SIGNAL_LOSS, F_BROADCAST}},
+	{"Circuit Bending", 11, {F_BENT, F_CIRCUIT, F_GRAY_CODE, F_OVERFLOW, F_REVERSE, F_CROSSTALK, F_STUCK_BITS, F_SYNC_LOSS, F_CLOCK, F_XOR, F_BIT_ROT}},
+	{"Print & Pixel", 7, {F_HALFTONE, F_RISO, F_ONE_BIT, F_CGA, F_GAME_BOY, F_MOSAIC, F_EDGES}},
+	{"Warp", 7, {F_LIQUID, F_RIPPLE, F_FISHEYE, F_ZOOM_BLUR, F_PIXEL_SORT, F_TEAR, F_MELT}},
+	{"Trip", 11, {F_PSYCHEDELIC, F_NEON, F_PIXEL_RAIN, F_LED_WALL, F_DOUBLE_VISION, F_SYNTHWAVE, F_BUBBLEGUM, F_BLOOD_MOON,
+	              F_CURSED, F_ECTOPLASM, F_EIGHT_COLORS}},
+	{"Chaos", 13, {F_DEEP_FRIED, F_DISCO, F_SLIT_SCAN, F_KALEIDO, F_MIRROR, F_DROSTE, F_SHATTER, F_SCRAMBLE, F_TOXIC, F_HELLFIRE, F_X_RAY, F_NEGATIVE, F_VAPORWAVE}},
 };
 #define GROUP_COUNT (int)(sizeof(groups) / sizeof(groups[0]))
 
@@ -141,12 +176,7 @@ int filterNext(int filter, int step)
 }
 
 // Filters made from the bits of the colors (circuit bending).
-static bool bitFilter(int f) { return f == 21 || f == 34 || f == 50 || f == 51 || f == 52; }
-
-bool filterHasSwatches(int filter)
-{
-	return filter >= 0 && filter < FILTER_COUNT && !defs[filter].glitch && !bitFilter(filter);
-}
+static bool bitFilter(int f) { return f == F_BENT || f == F_CIRCUIT || f == F_GRAY_CODE || f == F_OVERFLOW || f == F_REVERSE; }
 
 bool filterMoves(int filter) { return filter > 0 && filter < FILTER_COUNT && defs[filter].moves; }
 
@@ -189,102 +219,206 @@ static void saturate(float *r, float *g, float *b, float s)
 	*b = clampf(y + (*b - y) * s);
 }
 
+// Brightness mapped onto a row of n colors, dark to bright.
+static void gradientMap(float y, const float (*stops)[3], int n, float *r, float *g, float *b)
+{
+	float t = clampf(y) * (n - 1);
+	int i = t >= n - 1 ? n - 2 : (int)t;
+	t -= i;
+	*r = stops[i][0] + (stops[i + 1][0] - stops[i][0]) * t;
+	*g = stops[i][1] + (stops[i + 1][1] - stops[i][1]) * t;
+	*b = stops[i][2] + (stops[i + 1][2] - stops[i][2]) * t;
+}
+
 static void apply(int filter, float *r, float *g, float *b)
 {
 	float y;
 	switch (filter)
 	{
-	case 1: // Vivid: richer color, a touch more contrast
+	case F_TOXIC: // Toxic: magenta shadows, radioactive green light
+	{
+		static const float stops[4][3] = {{0.05f, 0, 0.1f}, {0.6f, 0, 0.55f}, {0.55f, 1, 0.1f}, {0.95f, 1, 0.6f}};
+		gradientMap(contrast(luma(*r, *g, *b), 1.2f), stops, 4, r, g, b);
+		break;
+	}
+	case F_HELLFIRE: // Hellfire: everything burns
+	{
+		static const float stops[5][3] = {{0, 0, 0}, {0.45f, 0, 0}, {1, 0.25f, 0}, {1, 0.75f, 0.1f}, {1, 1, 0.8f}};
+		gradientMap(contrast(luma(*r, *g, *b), 1.25f), stops, 5, r, g, b);
+		break;
+	}
+	case F_X_RAY: // X-Ray: brightness flipped, cold blue glow
+		y = contrast(1 - luma(*r, *g, *b), 1.35f);
+		*r = y * 0.55f;
+		*g = y * 0.9f;
+		*b = clampf(y * 1.1f + 0.08f);
+		break;
+	case F_NEGATIVE: // Negative: like the film
+		*r = 1 - *r;
+		*g = 1 - *g;
+		*b = 1 - *b;
+		break;
+	case F_VAPORWAVE: // Vaporwave: purple night, pink, cyan
+	{
+		static const float stops[5][3] = {{0.1f, 0, 0.25f}, {0.55f, 0.1f, 0.6f}, {1, 0.35f, 0.7f}, {0.4f, 0.95f, 1}, {0.95f, 1, 1}};
+		gradientMap(luma(*r, *g, *b), stops, 5, r, g, b);
+		break;
+	}
+	case F_BUBBLEGUM: // Bubblegum: pink shadows, mint light
+	{
+		static const float stops[4][3] = {{0.25f, 0.05f, 0.25f}, {0.95f, 0.45f, 0.7f}, {0.55f, 0.95f, 0.9f}, {1, 1, 1}};
+		gradientMap(luma(*r, *g, *b), stops, 4, r, g, b);
+		break;
+	}
+	case F_BLOOD_MOON: // Blood Moon: only red is left
+		y = contrast(luma(*r, *g, *b), 1.4f);
+		*r = powf(y, 0.8f);
+		*g = y * y * y * 0.3f;
+		*b = y * y * y * 0.25f;
+		break;
+	case F_SYNTHWAVE: // Synthwave: purple night, hot pink, orange sun, cyan
+	{
+		static const float stops[5][3] = {{0.05f, 0, 0.15f}, {0.5f, 0, 0.6f}, {1, 0.2f, 0.5f}, {1, 0.6f, 0.2f}, {0.4f, 1, 1}};
+		gradientMap(contrast(luma(*r, *g, *b), 1.15f), stops, 5, r, g, b);
+		break;
+	}
+	case F_CURSED: // Cursed: the colors inside out, loud and dark
+	{
+		float t = *r;
+		*r = 1 - *g;
+		*g = 1 - *b;
+		*b = 1 - t;
+		saturate(r, g, b, 1.7f);
+		*r = contrast(*r * 0.85f, 1.35f);
+		*g = contrast(*g * 0.85f, 1.35f);
+		*b = contrast(*b * 0.85f, 1.35f);
+		break;
+	}
+	case F_PSYCHEDELIC: // Psychedelic: brightness as a rainbow, three times round
+	{
+		y = luma(*r, *g, *b);
+		float h = (y * 3 - (int)(y * 3)) * 6, v = 0.45f + 0.55f * y, f = h - (int)h;
+		float p = 0, q = v * (1 - f), t = v * f;
+		switch ((int)h % 6)
+		{
+		case 0: *r = v, *g = t, *b = p; break;
+		case 1: *r = q, *g = v, *b = p; break;
+		case 2: *r = p, *g = v, *b = t; break;
+		case 3: *r = p, *g = q, *b = v; break;
+		case 4: *r = t, *g = p, *b = v; break;
+		default: *r = v, *g = p, *b = q;
+		}
+		break;
+	}
+	case F_ECTOPLASM: // Ectoplasm: a green ghost of the negative
+		y = contrast(1 - luma(*r, *g, *b), 1.5f);
+		*r = y * 0.3f;
+		*g = y;
+		*b = y * 0.6f;
+		break;
+	case F_EIGHT_COLORS: // 8 Colors: each channel on or off
+		saturate(r, g, b, 1.3f);
+		*r = *r > 0.5f;
+		*g = *g > 0.5f;
+		*b = *b > 0.5f;
+		break;
+	case F_DEEP_FRIED: // Deep Fried: far too much of everything
+		saturate(r, g, b, 2.4f);
+		*r = contrast(clampf(*r * 1.2f + 0.05f), 1.6f);
+		*g = contrast(*g, 1.6f);
+		*b = contrast(*b * 0.65f, 1.6f);
+		break;
+	case F_VIVID: // Vivid: richer color, a touch more contrast
 		*r = contrast(*r, 1.08f);
 		*g = contrast(*g, 1.08f);
 		*b = contrast(*b, 1.08f);
 		saturate(r, g, b, 1.4f);
 		break;
-	case 2: // Warm: golden light
+	case F_WARM: // Warm: golden light
 		*r = clampf(*r * 1.06f + 0.03f);
 		*g = clampf(*g * 1.01f + 0.01f);
 		*b = clampf(*b * 0.86f);
 		saturate(r, g, b, 1.08f);
 		break;
-	case 3: // Cool: crisp blue
+	case F_COOL: // Cool: crisp blue
 		*r = clampf(*r * 0.9f);
 		*g = clampf(*g * 0.99f + 0.01f);
 		*b = clampf(*b * 1.08f + 0.04f);
 		break;
-	case 4: // Dream: lifted shadows with a purple haze
+	case F_DREAM: // Dream: lifted shadows with a purple haze
 		saturate(r, g, b, 0.85f);
 		*r = clampf(0.10f + *r * 0.88f);
 		*g = clampf(0.04f + *g * 0.84f);
 		*b = clampf(0.13f + *b * 0.85f);
 		break;
-	case 5: // Cinema: teal shadows, orange highlights
+	case F_CINEMA: // Cinema: teal shadows, orange highlights
 		y = luma(*r, *g, *b) - 0.5f;
 		*r = contrast(clampf(*r + y * 0.16f), 1.1f);
 		*g = contrast(clampf(*g + y * 0.03f), 1.1f);
 		*b = contrast(clampf(*b - y * 0.16f), 1.1f);
 		break;
-	case 6: // Vintage: faded blacks, warm and muted
+	case F_VINTAGE: // Vintage: faded blacks, warm and muted
 		saturate(r, g, b, 0.75f);
 		*r = clampf(0.10f + *r * 0.93f);
 		*g = clampf(0.09f + *g * 0.85f);
 		*b = clampf(0.12f + *b * 0.72f);
 		break;
-	case 7: // Lomo: punchy contrast and color, dark corners
+	case F_LOMO: // Lomo: punchy contrast and color, dark corners
 		*r = smooth(*r) * 0.7f + *r * 0.3f;
 		*g = smooth(*g) * 0.7f + *g * 0.3f;
 		*b = smooth(*b) * 0.7f + *b * 0.3f;
 		saturate(r, g, b, 1.3f);
 		break;
-	case 8: // Sepia
+	case F_SEPIA: // Sepia
 		y = luma(*r, *g, *b);
 		*r = clampf(y * 1.07f + 0.08f);
 		*g = clampf(y * 0.95f + 0.03f);
 		*b = clampf(y * 0.78f);
 		break;
-	case 9: // Mono
+	case F_MONO: // Mono
 		*r = *g = *b = contrast(luma(*r, *g, *b), 1.1f);
 		break;
-	case 10: // Noir: hard black and white
+	case F_NOIR: // Noir: hard black and white
 		*r = *g = *b = smooth(smooth(luma(*r, *g, *b)));
 		break;
-	case 11: // Chrome: saturated slide film, deep reds
+	case F_CHROME: // Chrome: saturated slide film, deep reds
 		*r = contrast(clampf(*r * 1.05f), 1.15f);
 		*g = contrast(*g, 1.12f);
 		*b = contrast(clampf(*b * 0.95f), 1.12f);
 		saturate(r, g, b, 1.25f);
 		break;
-	case 12: // Bleach: bleach bypass, silvery and hard
+	case F_BLEACH: // Bleach: bleach bypass, silvery and hard
 		saturate(r, g, b, 0.45f);
 		*r = contrast(*r, 1.3f);
 		*g = contrast(*g, 1.3f);
 		*b = contrast(*b, 1.3f);
 		break;
-	case 13: // Cross: cross-processed, yellow highlights, blue shadows
+	case F_CROSS: // Cross: cross-processed, yellow highlights, blue shadows
 		*r = clampf(smooth(*r) * 1.05f);
 		*g = clampf(*g * 1.04f + 0.02f);
 		*b = clampf(*b * 0.7f + 0.12f);
 		saturate(r, g, b, 1.2f);
 		break;
-	case 14: // Pastel: soft, bright, light colors
+	case F_PASTEL: // Pastel: soft, bright, light colors
 		saturate(r, g, b, 0.7f);
 		*r = clampf(0.18f + *r * 0.8f);
 		*g = clampf(0.16f + *g * 0.8f);
 		*b = clampf(0.2f + *b * 0.78f);
 		break;
-	case 15: // Duotone: deep blue to pink
+	case F_DUOTONE: // Duotone: deep blue to pink
 		y = smooth(luma(*r, *g, *b));
 		*r = 0.12f + y * 0.88f;
 		*g = 0.08f + y * 0.42f;
 		*b = 0.36f + y * 0.26f;
 		break;
-	case 16: // Infrared: green turns pink, like false-color film
+	case F_INFRARED: // Infrared: green turns pink, like false-color film
 		y = *r;
 		*r = clampf(*g * 1.15f + 0.05f);
 		*g = clampf(y * 0.55f);
 		*b = clampf(*b * 0.95f + 0.05f);
 		saturate(r, g, b, 1.2f);
 		break;
-	case 17: // Thermal: brightness as a heat map
+	case F_THERMAL: // Thermal: brightness as a heat map
 	{
 		y = luma(*r, *g, *b);
 		static const float stops[6][3] = {{0, 0, 0.1f}, {0.2f, 0, 0.6f}, {0.8f, 0, 0.5f}, {1, 0.4f, 0}, {1, 0.85f, 0}, {1, 1, 1}};
@@ -296,7 +430,7 @@ static void apply(int filter, float *r, float *g, float *b)
 		*b = stops[i][2] + (stops[i + 1][2] - stops[i][2]) * t;
 		break;
 	}
-	case 18: // Acid: the colors turned around, loud
+	case F_ACID: // Acid: the colors turned around, loud
 	{
 		float t = *r;
 		*r = *b;
@@ -305,7 +439,7 @@ static void apply(int filter, float *r, float *g, float *b)
 		saturate(r, g, b, 1.8f);
 		break;
 	}
-	case 19: // Solar: solarized, bright parts flipped
+	case F_SOLAR: // Solar: solarized, bright parts flipped
 		*r = *r > 0.55f ? (1 - *r) * 1.6f : *r * 1.1f;
 		*g = *g > 0.55f ? (1 - *g) * 1.6f : *g * 1.1f;
 		*b = *b > 0.45f ? (1 - *b) * 1.4f : *b * 1.2f;
@@ -313,7 +447,7 @@ static void apply(int filter, float *r, float *g, float *b)
 		*g = clampf(*g);
 		*b = clampf(*b);
 		break;
-	case 20: // Game Boy: four greens
+	case F_GAME_BOY: // Game Boy: four greens
 	{
 		static const float pal[4][3] = {{0.06f, 0.22f, 0.06f}, {0.19f, 0.38f, 0.19f}, {0.55f, 0.67f, 0.06f}, {0.61f, 0.74f, 0.06f}};
 		int i = (int)(contrast(luma(*r, *g, *b), 1.2f) * 3.99f);
@@ -323,92 +457,92 @@ static void apply(int filter, float *r, float *g, float *b)
 		break;
 	}
 	// 21 Bent and 34 Circuit work on the bits, see bendBits.
-	case 22: // RGB Split
+	case F_RGB_SPLIT: // RGB Split
 		*r = contrast(*r, 1.05f);
 		*g = contrast(*g, 1.05f);
 		*b = contrast(*b, 1.05f);
 		break;
-	case 23: // VHS: bleeding color, lifted blacks
+	case F_VHS: // VHS: bleeding color, lifted blacks
 		saturate(r, g, b, 1.25f);
 		*r = clampf(0.05f + *r * 0.92f);
 		*g = clampf(0.04f + *g * 0.9f);
 		*b = clampf(0.07f + *b * 0.9f);
 		break;
-	case 24: // Datamosh
-	case 32: // Melt
-	case 45: // Smear
-	case 46: // Swirl
-	case 49: // Keyframe
+	case F_DATAMOSH: // Datamosh
+	case F_MELT: // Melt
+	case F_SMEAR: // Smear
+	case F_SWIRL: // Swirl
+	case F_KEYFRAME: // Keyframe
 		saturate(r, g, b, 1.3f);
 		break;
-	case 26: // Tear: cold digital
+	case F_TEAR: // Tear: cold digital
 		*r = clampf(*r * 0.92f);
 		*b = clampf(*b * 1.06f + 0.02f);
 		break;
-	case 28: // CRT: glowing phosphor
+	case F_CRT: // CRT: glowing phosphor
 		saturate(r, g, b, 1.2f);
 		*r = clampf(*r * 1.08f);
 		*g = clampf(*g * 1.08f);
 		*b = clampf(*b * 1.08f);
 		break;
-	case 30: // Echo: dreamy
+	case F_ECHO: // Echo: dreamy
 		saturate(r, g, b, 0.9f);
 		*r = clampf(0.05f + *r * 0.95f);
 		*b = clampf(0.08f + *b * 0.92f);
 		break;
-	case 35: // Prism
-	case 39: // Wobble
+	case F_PRISM: // Prism
+	case F_WOBBLE: // Wobble
 		*r = contrast(*r, 1.1f);
 		*g = contrast(*g, 1.1f);
 		*b = contrast(*b, 1.1f);
 		saturate(r, g, b, 1.15f);
 		break;
-	case 36: // Ghost: pale and cold
+	case F_GHOST: // Ghost: pale and cold
 		saturate(r, g, b, 0.8f);
 		*r = clampf(0.04f + *r * 0.92f);
 		*b = clampf(0.08f + *b * 0.95f);
 		break;
-	case 38: // Bleed
-	case 43: // VHS Worn: washed out tape
+	case F_BLEED: // Bleed
+	case F_VHS_WORN: // VHS Worn: washed out tape
 		saturate(r, g, b, 0.85f);
 		*r = clampf(0.08f + *r * 0.88f);
 		*g = clampf(0.07f + *g * 0.86f);
 		*b = clampf(0.1f + *b * 0.82f);
 		break;
-	case 41: // Hologram: cyan light
+	case F_HOLOGRAM: // Hologram: cyan light
 		y = luma(*r, *g, *b);
 		*r = clampf(y * 0.35f);
 		*g = clampf(0.05f + y * 0.9f);
 		*b = clampf(0.15f + y * 1.0f);
 		break;
-	case 44: // Anaglyph: nearly gray, so the red and cyan show
+	case F_ANAGLYPH: // Anaglyph: nearly gray, so the red and cyan show
 		saturate(r, g, b, 0.25f);
 		break;
-	case 58: // Cyanotype: Prussian blue to pale paper
+	case F_CYANOTYPE: // Cyanotype: Prussian blue to pale paper
 		y = contrast(luma(*r, *g, *b), 1.1f);
 		*r = 0.04f + y * 0.8f;
 		*g = 0.14f + y * 0.76f;
 		*b = 0.36f + y * 0.62f;
 		break;
-	case 59: // Matte: soft blacks, quiet highlights
+	case F_MATTE: // Matte: soft blacks, quiet highlights
 		saturate(r, g, b, 0.85f);
 		*r = clampf(0.12f + *r * 0.8f);
 		*g = clampf(0.11f + *g * 0.79f);
 		*b = clampf(0.1f + *b * 0.76f);
 		break;
-	case 60: // Golden: warm film light
+	case F_GOLDEN: // Golden: warm film light
 		*r = contrast(clampf(*r * 1.08f + 0.04f), 1.05f);
 		*g = contrast(clampf(*g * 1.02f + 0.02f), 1.05f);
 		*b = contrast(clampf(*b * 0.8f), 1.05f);
 		saturate(r, g, b, 1.12f);
 		break;
-	case 61: // Pop: loud colors in three steps each
+	case F_POP: // Pop: loud colors in three steps each
 		saturate(r, g, b, 1.6f);
 		*r = (int)(*r * 2.99f) / 2.0f;
 		*g = (int)(*g * 2.99f) / 2.0f;
 		*b = (int)(*b * 2.99f) / 2.0f;
 		break;
-	case 62: // CGA: black, cyan, magenta, white
+	case F_CGA: // CGA: black, cyan, magenta, white
 	{
 		static const float pal[4][3] = {{0, 0, 0}, {0.33f, 1, 1}, {1, 0.33f, 1}, {1, 1, 1}};
 		int best = 0;
@@ -427,12 +561,12 @@ static void apply(int filter, float *r, float *g, float *b)
 		*b = pal[best][2];
 		break;
 	}
-	case 63: // Halftone, 1-Bit and Edges work on gray
-	case 65:
-	case 66:
+	case F_HALFTONE: // Halftone, 1-Bit and Edges work on gray
+	case F_ONE_BIT:
+	case F_EDGES:
 		*r = *g = *b = contrast(luma(*r, *g, *b), 1.15f);
 		break;
-	case 31: // Night Vision: green phosphor
+	case F_NIGHT_VISION: // Night Vision: green phosphor
 		y = contrast(luma(*r, *g, *b), 1.3f);
 		*r = y * 0.16f;
 		*g = clampf(0.05f + y * 0.82f);
@@ -454,13 +588,13 @@ static int reverseBits(int v, int bits)
 static u16 bendBits(int filter, u16 c)
 {
 	int r = c >> 11, g = c >> 5 & 63, b = c & 31;
-	if (filter == 21) // Bent: each channel xor-ed with its neighbor
+	if (filter == F_BENT) // Bent: each channel xor-ed with its neighbor
 		return (r ^ g >> 1) << 11 | (g ^ (b << 1)) << 5 | (b ^ r);
-	if (filter == 50) // Gray Code: contour bands where bits flip
+	if (filter == F_GRAY_CODE) // Gray Code: contour bands where bits flip
 		return (r ^ r >> 1) << 11 | (g ^ g >> 1) << 5 | (b ^ b >> 1);
-	if (filter == 51) // Overflow: twice as bright, wrapping around like a counter
+	if (filter == F_OVERFLOW) // Overflow: twice as bright, wrapping around like a counter
 		return (r * 2 & 31) << 11 | (g * 2 & 63) << 5 | (b * 2 & 31);
-	if (filter == 52) // Reverse: the bits of each channel back to front
+	if (filter == F_REVERSE) // Reverse: the bits of each channel back to front
 		return reverseBits(r, 5) << 11 | reverseBits(g, 6) << 5 | reverseBits(b, 5);
 	// Circuit: channels swapped, green rotated by two bits
 	int g2 = (g << 2 | g >> 4) & 63;
@@ -1197,6 +1331,280 @@ static void feedback(u16 *img, int w, int h)
 	free(src);
 }
 
+// Deep Fried: oversharpened, grainy, in coarse blocks like a JPEG saved
+// a hundred times.
+static void fried(u16 *img, int w, int h)
+{
+	u16 *src = malloc(w * h * sizeof(u16));
+	if (!src)
+		return;
+	memcpy(src, img, w * h * sizeof(u16));
+	for (int y = 1; y < h - 1; y++)
+		for (int x = 1; x < w - 1; x++)
+		{
+			int i = y * w + x;
+			u16 c = src[i], l = src[i - 1], r = src[i + 1], u = src[i - w], d = src[i + w];
+			u32 n = (u32)(x * 640 / w) * 73856093u ^ (u32)(y * 480 / h) * 19349663u;
+			n = (n ^ n >> 13) * 1274126177u;
+			int grain = (int)(n >> 29) - 4;
+			int rr = 3 * R5(c) - (R5(l) + R5(r) + R5(u) + R5(d)) / 2 + grain;
+			int gg = 3 * G6(c) - (G6(l) + G6(r) + G6(u) + G6(d)) / 2 + grain * 2;
+			int bb = 3 * B5(c) - (B5(l) + B5(r) + B5(u) + B5(d)) / 2 + grain;
+			img[i] = RGB(clampi(rr, 0, 31), clampi(gg, 0, 63), clampi(bb, 0, 31));
+		}
+	free(src);
+	compress(img, w, h, &(u32){0xF41ED});
+}
+
+// Kaleido: the top-left quarter, mirrored into the other three.
+static void kaleido(u16 *img, int w, int h, bool down)
+{
+	for (int y = 0; y < h; y++)
+		for (int x = w / 2; x < w; x++)
+			img[y * w + x] = img[y * w + w - 1 - x];
+	if (down)
+		for (int y = h / 2; y < h; y++)
+			memcpy(img + y * w, img + (h - 1 - y) * w, w * sizeof(u16));
+}
+
+// Shatter: shards of the picture pushed out of place, with light edges.
+static void shatter(u16 *img, int w, int h, u32 *s)
+{
+	u16 *src = malloc(w * h * sizeof(u16));
+	if (!src)
+		return;
+	memcpy(src, img, w * h * sizeof(u16));
+	for (int k = 0; k < 16; k++)
+	{
+		int sw = w / 8 + rnd(s, w / 4), sh = h / 10 + rnd(s, h / 4), x0 = rnd(s, w - sw), y0 = rnd(s, h - sh);
+		int dx = rnd(s, w / 8) - w / 16, dy = rnd(s, h / 10) - h / 20;
+		for (int y = y0; y < y0 + sh; y++)
+			for (int x = x0; x < x0 + sw; x++)
+			{
+				u16 p = src[clampi(y + dy, 0, h - 1) * w + clampi(x + dx, 0, w - 1)];
+				if (y == y0 || x == x0)
+					p = blendPx(p, 0xFFFF);
+				img[y * w + x] = p;
+			}
+	}
+	free(src);
+}
+
+// Droste: the picture inside itself, smaller and smaller toward the middle.
+static void droste(u16 *img, int w, int h)
+{
+	u16 *src = malloc(w * h * sizeof(u16));
+	if (!src)
+		return;
+	memcpy(src, img, w * h * sizeof(u16));
+	const float inner = 0.55f;
+	for (int y = 0; y < h; y++)
+		for (int x = 0; x < w; x++)
+		{
+			float u = (x - w / 2.0f) / (w / 2.0f), v = (y - h / 2.0f) / (h / 2.0f);
+			int level = 0;
+			while (level < 5 && fabsf(u) < inner && fabsf(v) < inner)
+			{
+				u /= inner;
+				v /= inner;
+				level++;
+			}
+			if (!level)
+				continue;
+			u16 p = src[clampi((int)(h / 2.0f + v * h / 2), 0, h - 1) * w + clampi((int)(w / 2.0f + u * w / 2), 0, w - 1)];
+			// A thin dark frame around each copy.
+			float m = fabsf(u) > fabsf(v) ? fabsf(u) : fabsf(v);
+			img[y * w + x] = m > 0.97f ? darkenPx(p, 60) : p;
+		}
+	free(src);
+}
+
+// Scramble: tiles of a grid swapped around.
+static void scramble(u16 *img, int w, int h, u32 *s)
+{
+	enum { COLS = 8, ROWS = 6 };
+	int tw = w / COLS, th = h / ROWS;
+	u16 tmp[MAXDIM];
+	for (int k = 0; k < 14; k++)
+	{
+		int a = rnd(s, COLS * ROWS), b = rnd(s, COLS * ROWS);
+		int ax = a % COLS * tw, ay = a / COLS * th, bx = b % COLS * tw, by = b / COLS * th;
+		if (a == b)
+			continue;
+		for (int y = 0; y < th; y++)
+		{
+			u16 *ra = img + (ay + y) * w + ax, *rb = img + (by + y) * w + bx;
+			memcpy(tmp, ra, tw * sizeof(u16));
+			memcpy(ra, rb, tw * sizeof(u16));
+			memcpy(rb, tmp, tw * sizeof(u16));
+		}
+	}
+}
+
+static u16 *copyOf(const u16 *img, int w, int h)
+{
+	u16 *c = malloc(w * h * sizeof(u16));
+	if (c)
+		memcpy(c, img, w * h * sizeof(u16));
+	return c;
+}
+
+static u16 at(const u16 *img, int w, int h, int x, int y) { return img[clampi(y, 0, h - 1) * w + clampi(x, 0, w - 1)]; }
+
+// Neon: only the edges, glowing in their own colors, on black.
+static void neon(u16 *img, int w, int h)
+{
+	u16 *src = copyOf(img, w, h);
+	if (!src)
+		return;
+	for (int y = 0; y < h; y++)
+		for (int x = 0; x < w; x++)
+		{
+			u16 c = src[y * w + x], l = at(src, w, h, x - 1, y), r = at(src, w, h, x + 1, y);
+			u16 u = at(src, w, h, x, y - 1), d = at(src, w, h, x, y + 1);
+			int e = abs(G6(r) - G6(l)) + abs(G6(d) - G6(u)) + abs(R5(r) - R5(l)) + abs(B5(d) - B5(u));
+			int k = clampi(e * 26, 0, 255);
+			// The pixel's color at full brightness, scaled by the edge.
+			int m = maxi(maxi(R5(c) * 2, G6(c)), B5(c) * 2) + 1;
+			// A faint trace of the picture under the glow.
+			img[y * w + x] = RGB(clampi(R5(c) * 2 * 31 / m * k / 255 + k / 40 + R5(c) / 8, 0, 31),
+			                     clampi(G6(c) * 63 / m * k / 255 + G6(c) / 8, 0, 63),
+			                     clampi(B5(c) * 2 * 31 / m * k / 255 + k / 30 + B5(c) / 8, 0, 31));
+		}
+	free(src);
+}
+
+// Pixel Rain: the picture dimmed and green, bright drops falling down columns.
+static void pixelRain(u16 *img, int w, int h, u32 *s)
+{
+	for (int i = 0; i < w * h; i++)
+	{
+		u16 p = img[i];
+		int y = (R5(p) * 2 + G6(p) + B5(p) * 2) / 4; // 0..63
+		img[i] = RGB(y / 8, y * 2 / 3, y / 6);
+	}
+	int cw = maxi(2, w / 48), trail = h / 3;
+	for (int x0 = 0; x0 < w; x0 += cw)
+	{
+		if (rnd(s, 3) == 0)
+			continue;
+		int head = rnd(s, h + trail);
+		for (int t = 0; t < trail; t++)
+		{
+			int y = head - t;
+			if (y < 0 || y >= h)
+				continue;
+			int k = 255 - t * 255 / trail;
+			for (int x = x0; x < x0 + cw - 1 && x < w; x++)
+			{
+				u16 p = img[y * w + x];
+				img[y * w + x] = t == 0 ? RGB(24, 63, 24) : RGB(R5(p), clampi(G6(p) + k * 50 / 255, 0, 63), B5(p));
+			}
+		}
+	}
+}
+
+// LED Wall: the picture as a grid of round lights on black.
+static void ledWall(u16 *img, int w, int h)
+{
+	int cell = maxi(4, w / 30), r2 = cell * cell * 18 / 100; // radius about 0.42 of a cell
+	for (int y0 = 0; y0 < h; y0 += cell)
+		for (int x0 = 0; x0 < w; x0 += cell)
+		{
+			int sr = 0, sg = 0, sb = 0, n = 0;
+			for (int y = y0; y < y0 + cell && y < h; y++)
+				for (int x = x0; x < x0 + cell && x < w; x++, n++)
+				{
+					u16 p = img[y * w + x];
+					sr += R5(p), sg += G6(p), sb += B5(p);
+				}
+			u16 c = RGB(clampi(sr * 3 / (2 * n), 0, 31), clampi(sg * 3 / (2 * n), 0, 63), clampi(sb * 3 / (2 * n), 0, 31));
+			for (int y = y0; y < y0 + cell && y < h; y++)
+				for (int x = x0; x < x0 + cell && x < w; x++)
+				{
+					int dx = 2 * (x - x0) - cell + 1, dy = 2 * (y - y0) - cell + 1;
+					img[y * w + x] = dx * dx + dy * dy <= 4 * r2 ? c : 0;
+				}
+		}
+}
+
+// Sampling the picture through a mapping: for each pixel, where it comes from.
+typedef void (*Warp)(float u, float v, float t, float *su, float *sv);
+
+static void warp(u16 *img, int w, int h, Warp f, float t)
+{
+	u16 *src = copyOf(img, w, h);
+	if (!src)
+		return;
+	for (int y = 0; y < h; y++)
+		for (int x = 0; x < w; x++)
+		{
+			// u, v: -1..1 over the picture.
+			float su, sv;
+			f(2.0f * x / w - 1, 2.0f * y / h - 1, t, &su, &sv);
+			img[y * w + x] = at(src, w, h, (int)((su + 1) * w / 2), (int)((sv + 1) * h / 2));
+		}
+	free(src);
+}
+
+static void liquidAt(float u, float v, float t, float *su, float *sv)
+{
+	*su = u + 0.06f * sinf(v * 7 + t);
+	*sv = v + 0.06f * sinf(u * 6 + t * 1.3f);
+}
+
+static void rippleAt(float u, float v, float t, float *su, float *sv)
+{
+	float r = sqrtf(u * u + v * v), k = 1 + 0.04f * sinf(r * 22 - t);
+	*su = u * k;
+	*sv = v * k;
+}
+
+static void fisheyeAt(float u, float v, float t, float *su, float *sv)
+{
+	(void)t;
+	float r2 = u * u + v * v, k = 0.62f + 0.38f * r2; // the middle swells, the edges squeeze in
+	*su = u * k;
+	*sv = v * k;
+}
+
+// Zoom Blur: smeared toward the middle, like zooming while the shutter is open.
+static void zoomBlur(u16 *img, int w, int h)
+{
+	u16 *src = copyOf(img, w, h);
+	if (!src)
+		return;
+	for (int y = 0; y < h; y++)
+		for (int x = 0; x < w; x++)
+		{
+			int sr = 0, sg = 0, sb = 0;
+			for (int k = 0; k < 6; k++)
+			{
+				int sx = w / 2 + (x - w / 2) * (100 - k * 4) / 100, sy = h / 2 + (y - h / 2) * (100 - k * 4) / 100;
+				u16 p = src[sy * w + sx];
+				sr += R5(p), sg += G6(p), sb += B5(p);
+			}
+			img[y * w + x] = RGB(sr / 6, sg / 6, sb / 6);
+		}
+	free(src);
+}
+
+// Double Vision: the picture over itself, a little bigger and to the side.
+static void doubleVision(u16 *img, int w, int h)
+{
+	u16 *src = copyOf(img, w, h);
+	if (!src)
+		return;
+	int dx = w / 22, dy = h / 40;
+	for (int y = 0; y < h; y++)
+		for (int x = 0; x < w; x++)
+		{
+			u16 b = at(src, w, h, w / 2 + (x - w / 2) * 24 / 25 - dx, h / 2 + (y - h / 2) * 24 / 25 - dy);
+			img[y * w + x] = blendPx(src[y * w + x], b);
+		}
+	free(src);
+}
+
 void filterGlitch(u16 *img, int w, int h, int filter, int frame)
 {
 	if (!filterHasGlitch(filter) || w > MAXDIM || h > MAXDIM)
@@ -1411,7 +1819,76 @@ void filterGlitch(u16 *img, int w, int h, int filter, int frame)
 	case G_FEEDBACK:
 		feedback(img, w, h);
 		break;
+	case G_FRIED:
+		fried(img, w, h);
+		break;
+	case G_KALEIDO:
+		kaleido(img, w, h, true);
+		break;
+	case G_MIRROR:
+		kaleido(img, w, h, false);
+		break;
+	case G_SLIT: // rows slip along a wave that grows toward the bottom
+	{
+		float phase = (frame & 7) * 0.785f;
+		for (int y = 0; y < h; y++)
+		{
+			float v = (float)y / h;
+			shiftRowWrap(img + y * w, w, (int)(sinf(v * 9 + phase) * v * w / 6));
+		}
+		break;
+	}
+	case G_SHATTER:
+		shatter(img, w, h, s);
+		break;
+	case G_DISCO: // the channels change places every frame, stripes of it
+	{
+		int turn = (frame + 1) % 3, band = maxi(4, h / 12);
+		for (int y = 0; y < h; y++)
+		{
+			int t = (turn + y / band) % 3;
+			for (int x = 0; x < w; x++)
+			{
+				u16 p = img[y * w + x];
+				int r = R5(p), g = G6(p) >> 1, b = B5(p);
+				img[y * w + x] = t == 0 ? RGB(g, b << 1, r) : t == 1 ? RGB(b, r << 1, g) : RGB(31 - r, g << 1, 31 - b);
+			}
+		}
+		break;
+	}
+	case G_DROSTE:
+		droste(img, w, h);
+		break;
+	case G_SCRAMBLE:
+		scramble(img, w, h, s);
+		break;
+	case G_NEON:
+		neon(img, w, h);
+		break;
+	case G_RAIN:
+		pixelRain(img, w, h, s);
+		break;
+	case G_LED:
+		ledWall(img, w, h);
+		break;
+	case G_DOUBLE:
+		doubleVision(img, w, h);
+		break;
+	case G_ZOOM:
+		zoomBlur(img, w, h);
+		break;
+	case G_LIQUID:
+		warp(img, w, h, liquidAt, (frame & 7) * 0.785f);
+		break;
+	case G_RIPPLE:
+		warp(img, w, h, rippleAt, (frame & 7) * 0.785f);
+		break;
+	case G_FISHEYE:
+		warp(img, w, h, fisheyeAt, 0);
+		break;
+
 	case G_ANAGLYPH: // red to the left, cyan to the right, like 3D glasses
+
 	{
 		u16 tmp[MAXDIM];
 		int d = maxi(3, w / 40);

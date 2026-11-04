@@ -1,0 +1,24 @@
+name: Build and test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the 3DS app
+        run: make
+      - name: Tools for the tests
+        run: apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev python3 ffmpeg
+      - name: Tests and every screen drawn once
+        run: make test HOSTCC=gcc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Wiggle3DS
+          path: |
+            Wiggle3DS.3dsx
+            build/test/*.bmp

@@ -41,7 +41,7 @@ ICON		:=	meta/icon.png
 # replaces the installed title. Raise the version for each release.
 APP_UNIQUE_ID		:=	0xF57E3
 APP_PRODUCT_CODE	:=	CTR-H-WGLS
-APP_VERSION		:=	0.1.0
+APP_VERSION		:=	0.2.0
 RSF			:=	meta/cia.rsf
 BANNER_IMAGE		:=	meta/banner.png
 BANNER_AUDIO		:=	meta/banner.wav
@@ -173,7 +173,7 @@ ifneq ($(ROMFS),)
 	export _3DSXFLAGS += --romfs=$(CURDIR)/$(ROMFS)
 endif
 
-.PHONY: all clean cia send-cia qr
+.PHONY: all clean cia send-cia qr test
 
 #---------------------------------------------------------------------------------
 all: $(BUILD) $(GFXBUILD) $(DEPSDIR) $(ROMFS_T3XFILES) $(T3XHFILES)
@@ -214,6 +214,20 @@ cia: all
 # make send-cia IP=192.168.x.y also pushes it to FBI's "Receive URLs over the network".
 send-cia: cia
 	@python3 tools/send-cia.py $(TARGET).cia $(if $(IP),--push $(IP))
+
+# Tests and every screen drawn once, on the computer (see tools/test.c).
+HOSTCC ?= cc
+HOST_FLAGS := -O2 -Wall -Wno-unused-function -I$(DEVKITPRO)/libctru/include
+test:
+	@mkdir -p build/test
+	@$(HOSTCC) $(HOST_FLAGS) -o build/test/test tools/test.c source/filter.c source/develop.c source/mp4.c \
+		source/stereo.c source/jpeg.c source/draw.c source/icons.c source/font_data.c -lm
+	@$(HOSTCC) $(HOST_FLAGS) -o build/test/preview tools/preview.c source/ui.c source/ui_home.c source/ui_gallery.c \
+		source/ui_settings.c source/draw.c source/icons.c source/font_data.c source/filter.c source/qrcodegen.c \
+		source/wiggle.c -lm
+	@python3 tools/testpair.py build/test/pair.raw
+	@build/test/preview build/test/pair.raw build/test
+	@build/test/test build/test
 
 # The QR code in the README that installs the newest release from GitHub.
 qr:

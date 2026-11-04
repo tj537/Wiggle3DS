@@ -202,3 +202,41 @@ const char *wiggleSmoothName(int smooth)
 	return names[smooth >= 0 && smooth < SMOOTH_LEVELS ? smooth : 0];
 }
 
+
+#define LIVE_W (CAM_W / 4)
+#define LIVE_H (CAM_H / 4)
+#define LIVE_PATCH 10
+#define LIVE_SEARCH 40
+
+Offset wiggleLiveOffset(const u16 *left, const u16 *right, int *near)
+{
+	static u8 a[LIVE_W * LIVE_H], b[LIVE_W * LIVE_H];
+	static u32 sat[(LIVE_W + 1) * (LIVE_H + 1)];
+	const u16 *src[2] = {left, right};
+	u8 *dst[2] = {a, b};
+	for (int e = 0; e < 2; e++)
+		for (int y = 0; y < LIVE_H; y++)
+			for (int x = 0; x < LIVE_W; x++)
+			{
+				u16 p = src[e][(y * 4 + 1) * CAM_W + x * 4 + 1];
+				dst[e][y * LIVE_W + x] = ((p >> 11) * 2 + (p >> 5 & 63) * 2 + (p & 31)) * 255 / 219;
+			}
+	summedArea(sat, b, LIVE_W, LIVE_H);
+	Offset o = search(a, b, sat, LIVE_W, LIVE_H, LIVE_PATCH, LIVE_W / 2, LIVE_H / 2, -LIVE_SEARCH, LIVE_SEARCH, -2, 2);
+	*near = -1;
+	if (patchTexture(a, LIVE_W, LIVE_W / 2, LIVE_H / 2, LIVE_PATCH) < FLAT_SAD * 2)
+		return (Offset){o.dx * 4, o.dy * 4};
+	// The background: the farthest of a few points near the edges (far
+	// things have the largest dx), those with texture only.
+	static const int probe[4][2] = {{LIVE_W / 6, LIVE_H / 2}, {LIVE_W * 5 / 6, LIVE_H / 2}, {LIVE_W / 4, LIVE_H / 5}, {LIVE_W * 3 / 4, LIVE_H / 5}};
+	int far = -1000;
+	for (int i = 0; i < 4; i++)
+		if (patchTexture(a, LIVE_W, probe[i][0], probe[i][1], LIVE_PATCH) >= FLAT_SAD * 2)
+		{
+			Offset e = search(a, b, sat, LIVE_W, LIVE_H, LIVE_PATCH, probe[i][0], probe[i][1], -LIVE_SEARCH, LIVE_SEARCH, -2, 2);
+			far = e.dx > far ? e.dx : far;
+		}
+	if (far > -1000)
+		*near = (far - o.dx) * 4;
+	return (Offset){o.dx * 4, o.dy * 4};
+}

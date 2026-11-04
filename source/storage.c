@@ -30,6 +30,14 @@ void storageGifPath(int num, char *buf, size_t size)
 	snprintf(buf, size, DIR_GIF "/WIG_%04d.gif", num);
 }
 
+void storageExtraPath(int num, int extra, char *buf, size_t size)
+{
+	static const char *const names[EXTRA_COUNT] = {"%s/WIG_%04d.mp4", "%s/WIG_%04d.mpo", "%s/WIG_%04d_LR.jpg"};
+	snprintf(buf, size, names[extra], DIR_GIF, num);
+}
+
+void storageCachePath(int num, char *buf, size_t size) { snprintf(buf, size, DIR_CACHE "/WIG_%04d.jpg", num); }
+
 void storagePhotoPath(int num, char *buf, size_t size)
 {
 	snprintf(buf, size, DIR_GIF "/WIG_%04d.jpg", num);
@@ -41,6 +49,7 @@ void storageInit(void)
 	rename(DIR_PHOTO_OLD, DIR_PHOTO); // fails harmlessly if there is nothing to move
 	mkdir(DIR_GIF, 0777);
 	mkdir(DIR_PHOTO, 0777);
+	mkdir(DIR_CACHE, 0777);
 }
 
 void storagePurgeAll(void)
@@ -230,21 +239,26 @@ bool storageHasGif(int num)
 	return exists(path) || exists(jpg);
 }
 
-// The files of a shot: photo, GIF, JPG (a shot has one of the last two).
-static void shotPaths(int num, char paths[3][64])
+// The files of a shot: photo, GIF, JPG (a shot has one of these two), and
+// the extras it may have, and its picture for the share page.
+#define SHOT_FILES (4 + EXTRA_COUNT)
+static void shotPaths(int num, char paths[SHOT_FILES][64])
 {
 	photoPath(num, paths[0], 64);
 	storageGifPath(num, paths[1], 64);
 	storagePhotoPath(num, paths[2], 64);
+	for (int i = 0; i < EXTRA_COUNT; i++)
+		storageExtraPath(num, i, paths[3 + i], 64);
+	storageCachePath(num, paths[3 + EXTRA_COUNT], 64);
 }
 
 static void trashed(const char *path, char *out) { snprintf(out, 68, "%.63s.del", path); }
 
 void storageTrash(int num)
 {
-	char p[3][64], d[68];
+	char p[SHOT_FILES][64], d[68];
 	shotPaths(num, p);
-	for (int i = 0; i < 3; i++)
+	for (int i = 0; i < SHOT_FILES; i++)
 	{
 		trashed(p[i], d);
 		rename(p[i], d);
@@ -253,7 +267,7 @@ void storageTrash(int num)
 
 bool storageTrashed(int num)
 {
-	char p[3][64], d[68];
+	char p[SHOT_FILES][64], d[68];
 	shotPaths(num, p);
 	trashed(p[0], d);
 	return exists(d);
@@ -261,9 +275,9 @@ bool storageTrashed(int num)
 
 void storageRestore(int num)
 {
-	char p[3][64], d[68];
+	char p[SHOT_FILES][64], d[68];
 	shotPaths(num, p);
-	for (int i = 0; i < 3; i++)
+	for (int i = 0; i < SHOT_FILES; i++)
 	{
 		trashed(p[i], d);
 		rename(d, p[i]);
@@ -272,9 +286,9 @@ void storageRestore(int num)
 
 void storagePurge(int num)
 {
-	char p[3][64], d[68];
+	char p[SHOT_FILES][64], d[68];
 	shotPaths(num, p);
-	for (int i = 0; i < 3; i++)
+	for (int i = 0; i < SHOT_FILES; i++)
 	{
 		trashed(p[i], d);
 		unlink(d);
@@ -289,18 +303,23 @@ u64 storageFreeBytes(void)
 	return (u64)r.freeClusters * r.clusterSize;
 }
 
+u64 storageFileTime(const char *path)
+{
+	u64 t = 0;
+	return R_SUCCEEDED(archive_getmtime(path, &t)) ? t : 0;
+}
+
 u64 storageShotTime(int num)
 {
 	char path[64];
-	u64 t = 0;
 	photoPath(num, path, sizeof(path));
-	return R_SUCCEEDED(archive_getmtime(path, &t)) ? t : 0;
+	return storageFileTime(path);
 }
 
 void storageDelete(int num)
 {
-	char p[3][64];
+	char p[SHOT_FILES][64];
 	shotPaths(num, p);
-	for (int i = 0; i < 3; i++)
+	for (int i = 0; i < SHOT_FILES; i++)
 		unlink(p[i]);
 }
