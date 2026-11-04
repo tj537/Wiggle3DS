@@ -185,7 +185,7 @@ void reviewBottom(App *a, u16 *fb)
 	if (a->settings.dateStamp) // roughly where the export puts it
 		drawText(fb, 320, &fontSmall, CARD_X + CARD_W - 8 - textWidth(&fontSmall, a->stampText), CARD_Y + CARD_H - 8 - lineH(&fontSmall),
 		         COL565(255, 150, 40), 255, a->stampText);
-	const char *fl = tfmt("▲▼  %s", filterName(a->shotFilter));
+	const char *fl = filterName(a->shotFilter);
 	int fw = textWidth(&fontSmall, fl) + 20;
 	drawRoundRect(fb, 320, FILTER_PILL_X, FILTER_PILL_Y, fw, 20, 10, C_BLACK, 150);
 	drawText(fb, 320, &fontSmall, FILTER_PILL_X + 10, FILTER_PILL_Y + (20 - lineH(&fontSmall)) / 2, C_TEXT, 255, fl);
@@ -208,9 +208,9 @@ void reviewBottom(App *a, u16 *fb)
 		drawTextCentered(fb, 320, &fontBody, CARD_X + CARD_W / 2, CARD_Y + 10, C_TEXT, 255, "Tap your subject");
 		drawTextCentered(fb, 320, &fontSmall, CARD_X + CARD_W / 2, CARD_Y + 28, C_DIM, 255, "It stays still, the rest wiggles");
 	}
-	else if (a->shotFilter)
+	else
 	{
-		const char *hint = "Hold Y: original";
+		const char *hint = a->shotFilter ? "▲ Shuffle · ▼ Original · hold Y" : "▲ Shuffle filter";
 		drawRoundRect(fb, 320, CARD_X + 8, CARD_Y + 8, textWidth(&fontSmall, hint) + 20, 20, 10, C_BLACK, 150);
 		drawText(fb, 320, &fontSmall, CARD_X + 18, CARD_Y + 8 + (20 - lineH(&fontSmall)) / 2, C_TEXT, 255, hint);
 	}
@@ -222,8 +222,9 @@ void reviewBottom(App *a, u16 *fb)
 	slider(fb, SPEED_X0, SPEED_X1, SPEED_Y, (float)(DELAY_MAX - a->delayMs) / (DELAY_MAX - DELAY_MIN), !photo);
 
 	// Transition: four steps, the last one makes a plain photo (X steps too).
-	static const char *const steps[4] = {"Hard", "Soft", "Softer", "Photo"};
-	int cur = photo ? 3 : a->shotSmooth;
+	// Photo on top, then the wiggles from hard to softest.
+	static const char *const steps[4] = {"Photo", "Hard", "Soft", "Softer"};
+	int cur = photo ? 0 : a->shotSmooth + 1;
 	for (int i = 0; i < 4; i++)
 	{
 		int y = SEG_Y + i * (SEG_H + SEG_GAP);

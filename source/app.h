@@ -15,7 +15,7 @@ typedef enum
 	MODE_SETTINGS,
 } Mode;
 
-#define APP_VERSION "v0.1.0"
+#define APP_VERSION "v0.2.0"
 #define THEME_COUNT 6
 
 // Saved to sdmc:/Wiggle3DS/settings.txt.
@@ -150,11 +150,11 @@ typedef enum { MH_ALL, MH_FAVS, MH_ORIGINAL, MH_RANDOM } MenuHeader;
 // Review
 // Review: the shot on a card, under it big controls: speed (turtle to
 // hare), the transition in four steps, the filter strength; then the buttons.
-#define CARD_X 8
+#define CARD_X 88
 #define CARD_Y 4
 #define CARD_W 224
 #define CARD_H 168
-#define SEG_X 240 // beside the card, four steps over each other: hard, soft, softer, photo
+#define SEG_X 8 // left of the card, four steps over each other: photo, hard, soft, softer
 #define SEG_Y 4
 #define SEG_W 72
 #define SEG_H 38

@@ -504,9 +504,28 @@ int drawHint(u16 *fb, int sw, int x, int y, const char *button, const char *labe
 	int bw = badgeWidth(button), lh = fontSmall.ascent + fontSmall.descent;
 	int cy = y + lh / 2;
 	drawRoundRect(fb, sw, x, cy - BADGE_R, bw, BADGE_R * 2, BADGE_R, color, alpha);
-	// Centered on the capitals (about 73 % of the ascent), not the line box.
-	int capH = fontSmall.ascent * 73 / 100;
-	drawTextCentered(fb, sw, &fontSmall, x + bw / 2, cy - fontSmall.ascent + (capH + 1) / 2, COL565(14, 14, 22), alpha, button);
+	// Centered on the ink: across, the glyphs' pixels (not their advance);
+	// up and down, the capitals (about 73 % of the ascent).
+	int capH = fontSmall.ascent * 73 / 100, left = 1 << 20, right = -(1 << 20), pen = 0;
+	for (const char *s = button; *s;)
+	{
+		u32 code = nextCode(&s);
+		const Glyph *g = findGlyph(&fontSmall, code);
+		if (isIcon(code))
+		{
+			left = left < pen >> 4 ? left : pen >> 4;
+			pen += iconAdv(&fontSmall);
+			right = right > (pen >> 4) - 2 ? right : (pen >> 4) - 2;
+		}
+		else if (g)
+		{
+			int gl = ((pen + 8) >> 4) + g->x;
+			left = left < gl ? left : gl;
+			right = right > gl + g->w ? right : gl + g->w;
+			pen += g->adv;
+		}
+	}
+	drawText(fb, sw, &fontSmall, x + bw / 2 - (left + right) / 2, cy - fontSmall.ascent + (capH + 1) / 2, COL565(14, 14, 22), alpha, button);
 	if (label && *label)
 		drawText(fb, sw, &fontSmall, x + bw + 5, y, color, alpha, label);
 	return hintWidth(button, label);

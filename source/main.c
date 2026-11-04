@@ -714,6 +714,8 @@ static void saveFromReview(void)
 	app.saving = false;
 }
 
+static int randomFilter(int not, bool favs);
+
 static void updateReview(u32 down)
 {
 	if (app.confirmDiscard)
@@ -768,7 +770,7 @@ static void updateReview(u32 down)
 	{
 		int i = (touchY - SEG_Y) / (SEG_H + SEG_GAP);
 		i = i > 3 ? 3 : i;
-		app.shotSmooth = i >= 3 ? SMOOTH_OFF : i;
+		app.shotSmooth = i == 0 ? SMOOTH_OFF : i - 1; // Photo on top
 	}
 	// Filter strength, in steps of 10 %.
 	if (app.shotFilter && touching && inRect(startX, startY, STR_X0 - 24, SPEED_Y - 14, STR_X1 - STR_X0 + 54, 28))
@@ -788,10 +790,11 @@ static void updateReview(u32 down)
 		app.shotStrength -= STRENGTH_STEP;
 	if ((down & KEY_R) && app.shotStrength < 100)
 		app.shotStrength += STRENGTH_STEP;
-	if (down & KEY_UP)
-		app.shotFilter = filterNext(app.shotFilter, -1);
-	if ((down & KEY_DOWN) || (released && uiFilterPillHit(startX, startY) && uiFilterPillHit(touchX, touchY)))
-		app.shotFilter = filterNext(app.shotFilter, 1);
+	// Like on home: ▲ (or the filter pill) a random filter, ▼ back to Original.
+	if ((down & KEY_UP) || (released && uiFilterPillHit(startX, startY) && uiFilterPillHit(touchX, touchY)))
+		app.shotFilter = randomFilter(app.shotFilter, false);
+	if (down & KEY_DOWN)
+		app.shotFilter = 0;
 	if (down & KEY_X)
 		app.shotSmooth = (app.shotSmooth + 1) % (SMOOTH_OFF + 1);
 	if ((down & KEY_A) || hit == HIT_SAVE)

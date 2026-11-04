@@ -41,7 +41,7 @@ ICON		:=	meta/icon.png
 # replaces the installed title. Raise the version for each release.
 APP_UNIQUE_ID		:=	0xF57E3
 APP_PRODUCT_CODE	:=	CTR-H-WGLS
-APP_VERSION		:=	0.1.0
+APP_VERSION		:=	0.2.0
 RSF			:=	meta/cia.rsf
 BANNER_IMAGE		:=	meta/banner.png
 BANNER_AUDIO		:=	meta/banner.wav

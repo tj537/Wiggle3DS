@@ -69,7 +69,7 @@ The code always points to the [newest release](https://github.com/tj537/Wiggle3D
 1. Open Wiggle3DS. The top screen is your viewfinder.
 2. Hold the 3DS still and press **A**.
 3. On the bottom screen, **tap your subject** (a face, a cup, a dog). That point stays still, everything else wiggles around it.
-4. Slide from 🐢 to 🐇 for the speed, pick how soft the wiggle is, press **▲ ▼** for a filter.
+4. Slide from 🐢 to 🐇 for the speed, pick how soft the wiggle is, press **▲** for a random filter, **▼** for none.
 5. Press **A** to save. The GIF is made in the background, you can shoot again right away.
 
 **Tips for great wiggles:** have something close (1–2 m) and something far away. If you're too close, the viewfinder says **Too close · step back**. Want to see the wiggle before you shoot? Tap the wave button (or **◀**): the viewfinder wiggles live. In the dark, switch on night mode (the moon button, or **X**); it waits until you hold still, then takes four frames.
@@ -143,9 +143,9 @@ With double exposure on, the first shot stays over the viewfinder; **A** takes t
 |---|---|
 | Tap the picture | Set the point that stays still |
 | 🐢 ─ 🐇 slider, or **◀ ▶** | Speed |
-| Hard / Soft / Softer / Photo | How the wiggle moves; Photo makes a plain picture |
+| Photo / Hard / Soft / Softer (left of the picture) | Photo makes a plain picture; the others set how the wiggle moves |
 | ◐ slider | Filter strength |
-| **▲ ▼** | Filter |
+| **▲** / **▼** | Shuffle / Original, like on home |
 | **L** / **R** | Filter strength |
 | **X** | Next transition step |
 | Hold **Y** | Compare with the original |
