@@ -3,7 +3,7 @@
 
 // Color filters: an RGB565 -> RGB565 lookup table each, plus an optional
 // vignette (darkened corners) and for some a glitch.
-#define FILTER_COUNT 68
+#define FILTER_COUNT 81
 
 void filterInit(void);
 // Builds every table now; the export thread calls it once it is idle.

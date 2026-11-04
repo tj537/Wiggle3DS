@@ -33,7 +33,7 @@ typedef struct
 	int fps;             // viewfinder: 15, 20 or 30
 	bool flash;          // white flash on capture
 	int photoEye;         // transition off: the camera the photo is taken from, 0 left, 1 right
-	bool night;           // night mode: longer exposures, several frames stacked
+	bool night;           // auto night: long exposures and stacked frames when it gets dark
 	bool sound;           // shutter sound
 	bool gifSquare;       // export a 1:1 crop
 	bool tipDone;         // the pivot tip was shown and used once
@@ -41,7 +41,7 @@ typedef struct
 
 typedef enum
 {
-	SET_THEME, SET_TIMER, SET_GRID, SET_SOUND, SET_FLASH, SET_FPS, SET_PHOTO_EYE,
+	SET_THEME, SET_TIMER, SET_GRID, SET_SOUND, SET_FLASH, SET_NIGHT, SET_FPS, SET_PHOTO_EYE,
 	SET_AUTOPLAY, SET_GIF_SIZE, SET_GIF_SHAPE, SET_RESET, SET_COUNT
 } SettingRow;
 
@@ -60,7 +60,7 @@ typedef enum
 #define HEADER_BTN_H 26
 #define HEADER_PILL_W 40
 #define HEADER_PILL_GAP 6
-typedef enum { HB_RESET, HB_SELFIE, HB_NIGHT, HB_SHARE, HB_SETTINGS, HB_COUNT } HeaderButton;
+typedef enum { HB_RESET, HB_SELFIE, HB_SHARE, HB_SETTINGS, HB_COUNT } HeaderButton;
 
 // Home: a card of capture defaults (2x2 tiles), then the newest shots
 #define TILE_X 18
@@ -113,6 +113,14 @@ typedef enum { TILE_FILTER, TILE_SMOOTH, TILE_SPEED, TILE_QUICK, TILE_COUNT } Ti
 #define MENU_HEAD 20      // a group's heading
 #define MENU_GROUP_GAP 4
 #define MENU_VIEW_H 168   // visible height; the menu scrolls
+// Its header: the All / Favorites tabs and a way back to Original.
+#define MENU_TAB_Y 8
+#define MENU_TAB_H 26
+#define MENU_TAB_X 88
+#define MENU_TAB_W 60
+#define MENU_ORIG_W 84
+#define MENU_ORIG_X (308 - MENU_ORIG_W)
+typedef enum { MH_ALL, MH_FAVS, MH_ORIGINAL } MenuHeader;
 
 // Review
 #define CARD_X 48
@@ -140,6 +148,9 @@ typedef struct
 	int homeFocus; // D-pad on the recent shots: 0..RECENT_COUNT-1, RECENT_COUNT for "All", -1 if not
 	int menuSel, menuScroll; // menuScroll: pixels
 	bool camOk, selfie; // selfie: the inner camera, plain photos
+	bool night;         // auto night is on right now (see Settings.night)
+	bool menuFavs;      // the filter menu shows the favorites tab
+
 	bool camStarting;   // at start, before the camera is up
 	const u16 *liveL, *liveR;
 
@@ -234,6 +245,10 @@ bool uiSmoothPillHit(int x, int y); // review: the smoothing pill on the photo
 int uiMenuTileAt(const App *a, int x, int y); // the filter at a point, -1 if none
 int uiMenuMove(int filter, int dx, int dy);    // the filter beside / above / below
 int uiMenuMaxScroll(void);
+void uiMenuSetFavs(bool on);                   // the favorites tab, or all groups
+int uiMenuFirst(void);                         // the first filter listed, -1 if none
+int uiMenuHeaderAt(int x, int y);              // a MenuHeader at a point, -1 if none
+
 void uiMenuReveal(App *a);                     // scrolls the selection into view
 // Settings: the row at a point, and whether the point is on its ◀ (-1) or ▶ (+1).
 int uiSettingsRowAt(const App *a, int x, int y, int *step);

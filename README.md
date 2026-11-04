@@ -2,7 +2,7 @@
 
 **English** · [Deutsch](README.de.md)
 
-A retro photo and wiggle workstation for the New 3DS (XL). It takes a 3D photo with both outer cameras and turns it into a wigglegram GIF, a small camera move like the multi-lens Nimslo and Nishika cameras made. On top of that: plain photos, selfies, a night mode and 68 filters, from classic film looks to datamosh and circuit bending.
+A retro photo and wiggle workstation for the New 3DS (XL). It takes a 3D photo with both outer cameras and turns it into a wigglegram GIF, a small camera move like the multi-lens Nimslo and Nishika cameras made. On top of that: plain photos, selfies, auto exposure, an automatic night mode and 81 filters, from classic film looks to datamosh and circuit bending.
 
 ## Install
 
@@ -16,9 +16,10 @@ Or download `Wiggle3DS.cia` from the [latest release](https://github.com/tj537/W
 
 - **Wigglegrams:** both outer cameras fire at the same moment, you tap your subject, and the app makes a wiggling GIF that turns around that point. Transitions: Hard cut, Smooth, Extra smooth.
 - **Plain photos:** with the transition set to **Off**, a shot becomes a normal photo (JPG). Both camera images are kept, so in edit you can turn a photo into a wiggle again, and back.
-- **68 filters in groups:** Classic, Color, RGB & Ghost, Tape & Screen, Data Mosh, Circuit Bending, Print & Pixel, Warp. Every filter shows a live preview of your viewfinder in the menu; X marks favorites, which are listed first. The glitch filters change the image itself (RGB split, VHS, datamosh, pixel sort, melt, keyframe …), and many of them move. In the GIF that is two wiggle loops with patterns of their own, exactly what the preview in edit shows.
+- **81 filters in groups:** Classic, Color, RGB & Ghost, Tape & Screen, Data Mosh, Circuit Bending, Print & Pixel, Warp, Chaos (Deep Fried, Disco, Slit Scan, Kaleido, Droste, Shatter, Toxic, Hellfire, X-Ray …). Every filter shows a live preview of your viewfinder in the menu; X marks favorites, which have their own tab (All / ★ Favs, or SELECT). "Original" at the top goes back to no filter from anywhere in the list. The glitch filters change the image itself (RGB split, VHS, datamosh, pixel sort, melt, keyframe …), and many of them move. In the GIF that is two wiggle loops with patterns of their own, exactly what the preview in edit shows.
 - **Filter strength:** every filter from 0 to 100 %, with L and R in steps of 10 %.
-- **Night mode:** longer exposures, and four frames averaged into one for much less noise. Parts that move keep the first frame, so nothing ghosts.
+- **Auto exposure and white balance:** every shot gets one tone curve and white balance for both eyes: the midtones lifted toward middle gray, a soft shoulder so lamps and sky don't clip, colors pulled most of the way to neutral (only a nudge when nothing in the picture is gray, like a lawn under a blue sky).
+- **Night mode, automatic:** when the viewfinder stays dark, the camera switches to long exposures by itself (a moon shows at the top left) and each shot averages four frames into one for much less noise. Parts that move keep the first frame, so nothing ghosts. It turns off again once there is light to spare; "Auto night" in the settings switches it off for good.
 - **Selfie:** the inner camera, mirrored, for plain photos.
 - **Clean 3D:** both sensors are synced, and the right eye's brightness and color are matched to the left, so the GIF doesn't flicker.
 - **Gallery:** three rows that scroll sideways, hold to select several, delete with undo.
@@ -33,14 +34,13 @@ The viewfinder is on top; below are your capture defaults and the newest shots.
 
 - **A, L, R, ZL or ZR:** take a shot
 - **Y:** filter menu. Touching a filter previews it in the viewfinder, touching it again or A applies it, L R sets the strength, X makes it a favorite.
-- **X:** night mode on or off
 - **B or "All":** gallery
 - **▶:** to the newest shots; choose with ◀ ▶, open with A
-- **▼:** reset the capture defaults (filter, strength, transition, speed, quick capture, night, selfie). Also the button at the top left, and "Capture defaults" in the settings.
+- **▼:** reset the capture defaults (filter, strength, transition, speed, quick capture, selfie). Also the button at the top left, and "Capture defaults" in the settings.
 - **SELECT:** share to your phone
 - **START:** quit
 
-The buttons at the top, from the left: reset to defaults, selfie, night mode, share, settings. The LED on the left shows the battery: green, orange or red, with a ring while charging.
+The buttons at the top, from the left: reset to defaults, selfie, share, settings. The LED on the left shows the battery: green, orange or red, with a ring while charging; a moon next to it while auto night is on.
 
 The tiles below are the defaults for new shots: filter, transition (Off means photo), speed and quick capture. With quick capture every shot is saved right away, without the edit screen.
 

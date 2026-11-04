@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 #include "app.h"
 #include "draw.h"
@@ -418,7 +419,7 @@ void uiDrawTop(App *a, u16 *left, u16 *right, bool stereo)
 static const float cosTable[8] = {1, 0.7071f, 0, -0.7071f, -1, -0.7071f, 0, 0.7071f};
 static const float sinTable[8] = {0, 0.7071f, 1, 0.7071f, 0, -0.7071f, -1, -0.7071f};
 
-// Header pills, right to left: settings, wiggle, share, night.
+// Header pills, right to left: settings, share, selfie, reset.
 static int headerX(int i) { return 308 - (HB_COUNT - i) * HEADER_PILL_W - (HB_COUNT - 1 - i) * HEADER_PILL_GAP; }
 
 int uiHeaderAt(int x, int y)
@@ -433,10 +434,11 @@ int uiHeaderAt(int x, int y)
 
 // Filter menu layout, in content coordinates (0 = the top of the list):
 // each group is a heading and its buttons, three to a row.
-// The menu's groups: the filter groups, after Favorites if there are any.
+// The menu's groups: all filter groups, or on the favorites tab just those.
 static u8 favList[FILTER_COUNT];
 static int favCount;
 static u32 favBits[(FILTER_COUNT + 31) / 32];
+static bool favTab;
 
 void uiSetFavorites(const u32 *bits)
 {
@@ -451,12 +453,27 @@ void uiSetFavorites(const u32 *bits)
 		}
 }
 
+void uiMenuSetFavs(bool on) { favTab = on; }
+
 static bool isFavorite(int f) { return favBits[f / 32] >> (f % 32) & 1; }
-static int mFav(void) { return favCount ? 1 : 0; }
-static int mGroups(void) { return mFav() + filterGroupCount(); }
+static int mFav(void) { return favTab && favCount ? 1 : 0; }
+static int mGroups(void) { return favTab ? mFav() : filterGroupCount(); }
+
+int uiMenuHeaderAt(int x, int y)
+{
+	if (y < MENU_TAB_Y - 5 || y >= MENU_TAB_Y + MENU_TAB_H + 5)
+		return -1;
+	if (x >= MENU_TAB_X - 4 && x < MENU_TAB_X + 2 * MENU_TAB_W)
+		return x < MENU_TAB_X + MENU_TAB_W ? MH_ALL : MH_FAVS;
+	if (x >= MENU_ORIG_X - 4 && x < 316)
+		return MH_ORIGINAL;
+	return -1;
+}
 static const char *mName(int g) { return g < mFav() ? "Favorites" : filterGroupName(g - mFav()); }
 static int mSize(int g) { return g < mFav() ? favCount : filterGroupSize(g - mFav()); }
 static int mItem(int g, int i) { return g < mFav() ? favList[i] : filterGroupItem(g - mFav(), i); }
+
+int uiMenuFirst(void) { return mGroups() ? mItem(0, 0) : -1; }
 
 static int groupTop(int g)
 {
@@ -466,7 +483,7 @@ static int groupTop(int g)
 	return y;
 }
 
-static int menuHeight(void) { return groupTop(mGroups()) - MENU_GROUP_GAP; }
+static int menuHeight(void) { return mGroups() ? groupTop(mGroups()) - MENU_GROUP_GAP : 0; }
 
 // Group and place of a filter in the menu.
 static void menuPlace(int filter, int *group, int *index)
@@ -507,6 +524,8 @@ int uiMenuTileAt(const App *a, int x, int y)
 
 int uiMenuMove(int filter, int dx, int dy)
 {
+	if (!mGroups())
+		return filter;
 	int g, i;
 	menuPlace(filter, &g, &i);
 	if (dx)
@@ -565,9 +584,10 @@ static void tileRect(int i, int *x, int *y)
 	*y = TILE_Y + (i / 2) * (TILE_H + TILE_GAP);
 }
 
-// Speed tile: ◀ and ▶ buttons at its right end.
-#define SPEED_PLUS_X (TILE_W - 20)
-#define SPEED_MINUS_X (TILE_W - 46)
+// Speed tile: big ◀ and ▶ buttons at its right end, for fingers.
+#define SPEED_R 14
+#define SPEED_PLUS_X (TILE_W - 18)
+#define SPEED_MINUS_X (TILE_W - 50)
 
 int uiTileAt(int x, int y, int *step)
 {
@@ -579,7 +599,8 @@ int uiTileAt(int x, int y, int *step)
 		if (x >= tx - TILE_GAP / 2 && x < tx + TILE_W + TILE_GAP / 2 && y >= ty - TILE_GAP / 2 && y < ty + TILE_H + TILE_GAP / 2)
 		{
 			int rx = x - tx;
-			*step = rx >= SPEED_PLUS_X - 13 ? 1 : rx >= SPEED_MINUS_X - 13 ? -1 : 0;
+			// Each button takes half of the space next to the value.
+			*step = rx >= (SPEED_MINUS_X + SPEED_PLUS_X) / 2 ? 1 : rx >= SPEED_MINUS_X - SPEED_R - 6 ? -1 : 0;
 			return i;
 		}
 	}
@@ -643,17 +664,61 @@ static void homeEmpty(u16 *fb)
 	drawTextCentered(fb, 320, &fontSmall, 160, RECENT_Y + 28, C_DIM, 255, "Press A for your first shot");
 }
 
-// Each filter swatch shows what the filter does to skin, sky and leaves.
-static const u16 samples[3] = {COL565(226, 168, 138), COL565(92, 150, 222), COL565(84, 160, 92)};
+// A filter's icon: a tiny made-up scene (sky, sun, a face, hills) with the
+// filter on it, glitches included, so every filter shows what it does.
+#define ICON_W 48
+#define ICON_H 32
+static u16 iconScene[ICON_W * ICON_H], iconOut[ICON_W * ICON_H];
 
-static void swatches(u16 *fb, float x, float cy, int filter)
+static void buildIconScene(void)
 {
-	const u16 *lut = filterLut(filter);
-	for (int k = 0; k < 3; k++)
+	for (int y = 0; y < ICON_H; y++)
+		for (int x = 0; x < ICON_W; x++)
+		{
+			float t = (float)y / ICON_H, hill = 21 + 3 * sinf(x * 0.16f) + (x > 30 ? (x - 30) * 0.15f : 0);
+			int r = 70 + (int)(t * 120), g = 130 + (int)(t * 90), b = 230;
+			float ds = hypotf(x - 36.0f, y - 9.0f), df = hypotf(x - 14.0f, y - 18.0f);
+			if (ds < 6)
+				r = 255, g = 205, b = 80;
+			if (y > hill)
+				r = 60 + (x * 3 & 31), g = 150 - (int)(y - hill) * 4, b = 70;
+			if (df < 6.5f)
+				r = 226, g = 168, b = 138;
+			if ((df >= 6.5f && df < 7.5f) || hypotf(x - 12.0f, y - 16.0f) < 1.2f || hypotf(x - 17.0f, y - 16.0f) < 1.2f)
+				r = 40, g = 30, b = 40;
+			iconScene[y * ICON_W + x] = COL565(r, g < 0 ? 0 : g, b);
+		}
+}
+
+static void filterIcon(u16 *fb, int x, int y, int w, int h, int filter, int strength)
+{
+	if (!iconScene[0])
+		buildIconScene();
+	filterApply(iconOut, iconScene, ICON_W, 0, 0, ICON_W, ICON_H, filter, 0, strength);
+	drawRoundRect(fb, 320, x - 1, y - 1, w + 2, h + 2, 7, C_BLACK, 90);
+	drawImage(fb, 320, x, y, w, h, iconOut, ICON_W, 0, 0, ICON_W, ICON_H, NULL, 6);
+}
+
+// Text cut to a width, with "…" where it was cut.
+static const char *fitText(const Font *f, const char *s, int w)
+{
+	if (textWidth(f, s) <= w)
+		return s;
+	static char buf[64];
+	int n = snprintf(buf, sizeof(buf) - 4, "%s", s);
+	n = n > (int)sizeof(buf) - 5 ? (int)sizeof(buf) - 5 : n;
+	while (n > 0)
 	{
-		drawCircle(fb, 320, x + k * 7, cy, 4.5f, C_BLACK, 90);
-		drawCircle(fb, 320, x + k * 7, cy, 3.5f, lut ? lut[samples[k]] : samples[k], 255);
+		while (n > 0 && (buf[n - 1] & 0xC0) == 0x80) // whole UTF-8 characters
+			n--;
+		n--;
+		while (n > 0 && buf[n - 1] == ' ')
+			n--;
+		strcpy(buf + n, "…");
+		if (textWidth(f, buf) <= w)
+			break;
 	}
+	return buf;
 }
 
 // The header of home and gallery: settings gear and share button on the right.
@@ -670,7 +735,7 @@ static void headerButtons(App *a, u16 *fb)
 	for (int i = 0; i < HB_COUNT; i++)
 	{
 		int x = headerX(i);
-		bool on = (i == HB_NIGHT && a->settings.night) || (i == HB_SELFIE && a->selfie);
+		bool on = i == HB_SELFIE && a->selfie;
 		if (on)
 			drawRoundRectGrad(fb, 320, x, HEADER_BTN_Y, HEADER_PILL_W, HEADER_BTN_H, HEADER_BTN_H / 2, C_ACC0, C_ACC1, 255);
 		else
@@ -691,9 +756,7 @@ static void headerButtons(App *a, u16 *fb)
 			iconLine(fb, cx + 7, cy + 3, cx - 7, cy + 3, ink);
 			iconLine(fb, cx - 7, cy + 3, cx - 3, cy + 7, ink);
 			break;
-		case HB_NIGHT: // crescent
-			drawCrescent(fb, 320, cx - 0.5f, cy, 6.5f, cx + 3, cy - 2.5f, 5.5f, ink, 255);
-			break;
+
 		case HB_SHARE: // three linked dots
 			iconLine(fb, cx - 5, cy, cx + 5, cy - 5, ink);
 			iconLine(fb, cx - 5, cy, cx + 5, cy + 5, ink);
@@ -718,9 +781,9 @@ static void tile(u16 *fb, int i, const char *label, const char *value)
 	drawText(fb, 320, &fontBody, x + 10, y + 17, C_TEXT, 255, value);
 }
 
-static void roundButton(u16 *fb, float cx, float cy, const char *glyph, bool on)
+static void roundButton(u16 *fb, float cx, float cy, float r, const char *glyph, bool on)
 {
-	drawCircle(fb, 320, cx, cy, 10, on ? C_STROKE : C_SURFACE, 255);
+	drawCircle(fb, 320, cx, cy, r, on ? C_STROKE : C_SURFACE, 255);
 	drawTextCentered(fb, 320, &fontSmall, (int)cx, (int)cy - lineH(&fontSmall) / 2, on ? C_TEXT : C_DIM, 255, glyph);
 }
 
@@ -731,9 +794,12 @@ static void defaultsPanel(App *a, u16 *fb)
 	drawRoundRectOutline(fb, 320, PANEL_X, PANEL_Y, PANEL_W, PANEL_H, 14, 1, C_STROKE, 255);
 	int x, y;
 
-	tile(fb, TILE_FILTER, "Filter", filterName(st->filter));
+	// Name and strength left, cut short before the icon on the right.
 	tileRect(TILE_FILTER, &x, &y);
-	swatches(fb, x + TILE_W - 28, y + TILE_H / 2.0f, st->filter);
+	const int iw = 39, ih = 26, ix = x + TILE_W - iw - 5;
+	tile(fb, TILE_FILTER, st->filter && st->strength < 100 ? tfmt("Filter · %d%%", st->strength) : "Filter",
+	     fitText(&fontBody, filterName(st->filter), ix - x - 16));
+	filterIcon(fb, ix, y + (TILE_H - ih) / 2, iw, ih, st->filter, st->strength);
 
 	// Off (a plain photo), then the smoothing levels: one dot more each.
 	bool off = st->smooth == SMOOTH_OFF;
@@ -750,8 +816,8 @@ static void defaultsPanel(App *a, u16 *fb)
 
 	tile(fb, TILE_SPEED, "Speed", tfmt("%d ms", st->delayMs));
 	tileRect(TILE_SPEED, &x, &y);
-	roundButton(fb, x + SPEED_MINUS_X, y + TILE_H / 2.0f, "◀", st->delayMs > DELAY_MIN);
-	roundButton(fb, x + SPEED_PLUS_X, y + TILE_H / 2.0f, "▶", st->delayMs < DELAY_MAX);
+	roundButton(fb, x + SPEED_MINUS_X, y + TILE_H / 2.0f, SPEED_R, "◀", st->delayMs > DELAY_MIN);
+	roundButton(fb, x + SPEED_PLUS_X, y + TILE_H / 2.0f, SPEED_R, "▶", st->delayMs < DELAY_MAX);
 
 	tile(fb, TILE_QUICK, "Quick capture", st->quick ? "On" : "Off");
 	tileRect(TILE_QUICK, &x, &y);
@@ -832,14 +898,35 @@ static void filterMenu(App *a, u16 *fb)
 		}
 	}
 
-	// Title and hints over what scrolls under them.
+	if (favTab && !favCount)
+	{
+		drawStar(fb, 320, 160, MENU_Y + 40, 12, C_STAR, 255);
+		drawTextCentered(fb, 320, &fontBody, 160, MENU_Y + 64, C_TEXT, 255, "No favorites yet");
+		drawTextCentered(fb, 320, &fontSmall, 160, MENU_Y + 86, C_DIM, 255, "In All, X marks a filter as a favorite");
+	}
+
+	// Title, tabs and hints over what scrolls under them.
 	backgroundRows(fb, 0, MENU_Y - 4);
 	backgroundRows(fb, MENU_Y + MENU_VIEW_H + 2, 240);
 	drawText(fb, 320, &fontTitle, 16, 9, C_TEXT, 255, "Filter");
-	int g, i;
-	menuPlace(a->menuSel, &g, &i);
-	const char *note = tfmt("%s%s", mName(g), filterMoves(a->menuSel) ? " · moves" : "");
-	drawText(fb, 320, &fontSmall, 304 - textWidth(&fontSmall, note), 17, C_DIM, 255, note);
+	drawRoundRect(fb, 320, MENU_TAB_X, MENU_TAB_Y, 2 * MENU_TAB_W, MENU_TAB_H, MENU_TAB_H / 2, C_SURFACE2, 255);
+	int tx = favTab ? MENU_TAB_X + MENU_TAB_W : MENU_TAB_X;
+	drawRoundRectGrad(fb, 320, tx + 2, MENU_TAB_Y + 2, MENU_TAB_W - 4, MENU_TAB_H - 4, MENU_TAB_H / 2 - 2, C_ACC0, C_ACC1, 255);
+	int ty = MENU_TAB_Y + (MENU_TAB_H - lineH(&fontSmall)) / 2 - 1;
+	drawTextCentered(fb, 320, &fontSmall, MENU_TAB_X + MENU_TAB_W / 2, ty, favTab ? C_DIM : C_WHITE, 255, "All");
+	int fw = 12 + textWidth(&fontSmall, "Favs"), fx = MENU_TAB_X + MENU_TAB_W + (MENU_TAB_W - fw) / 2;
+	drawStar(fb, 320, fx + 4, MENU_TAB_Y + MENU_TAB_H / 2.0f, 4.5f, favTab ? C_WHITE : C_STAR, 255);
+	drawText(fb, 320, &fontSmall, fx + 12, ty, favTab ? C_WHITE : C_DIM, 255, "Favs");
+	// Original: one tap from anywhere in the list.
+	bool orig = a->settings.filter == 0;
+	drawRoundRect(fb, 320, MENU_ORIG_X, MENU_TAB_Y, MENU_ORIG_W, MENU_TAB_H, MENU_TAB_H / 2, C_SURFACE2, 255);
+	if (orig)
+		drawRoundRectOutline(fb, 320, MENU_ORIG_X, MENU_TAB_Y, MENU_ORIG_W, MENU_TAB_H, MENU_TAB_H / 2, 1, C_ACC1, 255);
+	float ox = MENU_ORIG_X + 15, oy = MENU_TAB_Y + MENU_TAB_H / 2.0f;
+	drawRing(fb, 320, ox, oy, 5, 1.4f, C_TEXT, 255); // no filter: an empty circle with a slash
+	iconLine(fb, ox - 3.5f, oy + 3.5f, ox + 3.5f, oy - 3.5f, C_TEXT);
+	drawText(fb, 320, &fontSmall, MENU_ORIG_X + 26, ty, C_TEXT, 255, "Original");
+
 	int max = uiMenuMaxScroll();
 	if (max > 0)
 	{
@@ -865,6 +952,13 @@ static void homeBottom(App *a, u16 *fb)
 		if (a->charging)
 			drawRing(fb, 320, 22, HEADER_CY, 7.5f, 1.2f, led, 200);
 	}
+	// Auto night at work: a moon, no button; it goes away by itself.
+	if (a->night)
+	{
+		drawCrescent(fb, 320, 42, HEADER_CY, 6, 45, HEADER_CY - 2.5f, 5, C_ACC1, 255);
+		drawText(fb, 320, &fontSmall, 52, HEADER_CY - lineH(&fontSmall) / 2, C_DIM, 255, "Night");
+	}
+
 	headerButtons(a, fb);
 	defaultsPanel(a, fb);
 
@@ -909,12 +1003,12 @@ static void homeBottom(App *a, u16 *fb)
 	}
 	else
 	{
-		static const char *const btns[] = {"A", "Y", "X", "START"};
+		static const char *const btns[] = {"A", "Y", "START"};
 		const char *const labels[] = {a->settings.timer ? tfmt("In %d s", a->settings.timer)
 		                              : a->selfie ? "Selfie" : a->settings.smooth == SMOOTH_OFF ? "Photo"
 		                              : a->settings.quick ? "Quick shot" : "Capture",
-		                              "Filter", a->settings.night ? "Night off" : "Night", "Quit"};
-		centeredHints(fb, 220, 4, btns, labels);
+		                              "Filter", "Quit"};
+		centeredHints(fb, 220, 3, btns, labels);
 	}
 
 	if (a->filterMenu)
@@ -1109,7 +1203,7 @@ static void reviewBottom(App *a, u16 *fb)
 // ---- settings ----
 
 static const char *const settingLabels[SET_COUNT] = {
-	"Theme", "Self-timer", "Grid lines", "Shutter sound", "Capture flash",
+	"Theme", "Self-timer", "Grid lines", "Shutter sound", "Capture flash", "Auto night",
 	"Viewfinder", "Photo camera", "Gallery autoplay", "GIF size", "GIF shape", "Capture defaults",
 };
 
@@ -1122,6 +1216,7 @@ const char *uiSettingValue(const Settings *st, int row)
 	case SET_GRID: return st->grid ? "On" : "Off";
 	case SET_SOUND: return st->sound ? "On" : "Off";
 	case SET_FLASH: return st->flash ? "On" : "Off";
+	case SET_NIGHT: return st->night ? "On" : "Off";
 	case SET_FPS: return tfmt("%d fps", st->fps);
 	case SET_PHOTO_EYE: return st->photoEye ? "Right" : "Left";
 	case SET_AUTOPLAY: return st->autoplay ? "On" : "Off";

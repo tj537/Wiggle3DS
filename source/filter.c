@@ -13,6 +13,7 @@ typedef enum
 	G_INTERLACE, G_CIRCUIT, G_PRISM, G_GHOST, G_TRAILS, G_BLEED, G_WOBBLE, G_SIGNAL, G_HOLO, G_BROADCAST,
 	G_WORN, G_ANAGLYPH, G_SMEAR, G_SWIRL, G_COMPRESS, G_DRIFT, G_KEYFRAME, G_CROSSTALK, G_STUCK, G_SYNC,
 	G_CLOCK, G_XOR, G_HALFTONE, G_RISO, G_ONEBIT, G_EDGES, G_FEEDBACK,
+	G_FRIED, G_KALEIDO, G_MIRROR, G_SLIT, G_SHATTER, G_DISCO, G_DROSTE, G_SCRAMBLE,
 } Glitch;
 
 // Moving glitches get a new pattern every frame of the loop (see
@@ -101,6 +102,20 @@ static const FilterDef defs[FILTER_COUNT] = {
 	{"1-Bit", 0, G_ONEBIT},
 	{"Edges", 0, G_EDGES},
 	{"Feedback", 0, G_FEEDBACK},
+	// chaos
+	{"Toxic", 60, 0},
+	{"Hellfire", 120, 0},
+	{"X-Ray", 80, 0},
+	{"Negative", 0, 0},
+	{"Vaporwave", 40, 0},
+	{"Deep Fried", 0, G_FRIED},
+	{"Kaleido", 0, G_KALEIDO},
+	{"Mirror", 0, G_MIRROR},
+	{"Slit Scan", 0, G_SLIT, MOVES},
+	{"Shatter", 0, G_SHATTER, MOVES},
+	{"Disco", 0, G_DISCO, MOVES},
+	{"Droste", 70, G_DROSTE},
+	{"Scramble", 0, G_SCRAMBLE, MOVES},
 };
 
 // The filter menu's groups, in order; every filter is in one.
@@ -118,6 +133,7 @@ static const struct
 	{"Circuit Bending", 11, {21, 34, 50, 51, 52, 53, 54, 55, 56, 57, 29}},
 	{"Print & Pixel", 7, {63, 64, 65, 62, 20, 27, 66}},
 	{"Warp", 3, {25, 26, 32}},
+	{"Chaos", 13, {73, 78, 76, 74, 75, 79, 77, 80, 68, 69, 70, 71, 72}},
 };
 #define GROUP_COUNT (int)(sizeof(groups) / sizeof(groups[0]))
 
@@ -189,11 +205,57 @@ static void saturate(float *r, float *g, float *b, float s)
 	*b = clampf(y + (*b - y) * s);
 }
 
+// Brightness mapped onto a row of n colors, dark to bright.
+static void gradientMap(float y, const float (*stops)[3], int n, float *r, float *g, float *b)
+{
+	float t = clampf(y) * (n - 1);
+	int i = t >= n - 1 ? n - 2 : (int)t;
+	t -= i;
+	*r = stops[i][0] + (stops[i + 1][0] - stops[i][0]) * t;
+	*g = stops[i][1] + (stops[i + 1][1] - stops[i][1]) * t;
+	*b = stops[i][2] + (stops[i + 1][2] - stops[i][2]) * t;
+}
+
 static void apply(int filter, float *r, float *g, float *b)
 {
 	float y;
 	switch (filter)
 	{
+	case 68: // Toxic: magenta shadows, radioactive green light
+	{
+		static const float stops[4][3] = {{0.05f, 0, 0.1f}, {0.6f, 0, 0.55f}, {0.55f, 1, 0.1f}, {0.95f, 1, 0.6f}};
+		gradientMap(contrast(luma(*r, *g, *b), 1.2f), stops, 4, r, g, b);
+		break;
+	}
+	case 69: // Hellfire: everything burns
+	{
+		static const float stops[5][3] = {{0, 0, 0}, {0.45f, 0, 0}, {1, 0.25f, 0}, {1, 0.75f, 0.1f}, {1, 1, 0.8f}};
+		gradientMap(contrast(luma(*r, *g, *b), 1.25f), stops, 5, r, g, b);
+		break;
+	}
+	case 70: // X-Ray: brightness flipped, cold blue glow
+		y = contrast(1 - luma(*r, *g, *b), 1.35f);
+		*r = y * 0.55f;
+		*g = y * 0.9f;
+		*b = clampf(y * 1.1f + 0.08f);
+		break;
+	case 71: // Negative: like the film
+		*r = 1 - *r;
+		*g = 1 - *g;
+		*b = 1 - *b;
+		break;
+	case 72: // Vaporwave: purple night, pink, cyan
+	{
+		static const float stops[5][3] = {{0.1f, 0, 0.25f}, {0.55f, 0.1f, 0.6f}, {1, 0.35f, 0.7f}, {0.4f, 0.95f, 1}, {0.95f, 1, 1}};
+		gradientMap(luma(*r, *g, *b), stops, 5, r, g, b);
+		break;
+	}
+	case 73: // Deep Fried: far too much of everything
+		saturate(r, g, b, 2.4f);
+		*r = contrast(clampf(*r * 1.2f + 0.05f), 1.6f);
+		*g = contrast(*g, 1.6f);
+		*b = contrast(*b * 0.65f, 1.6f);
+		break;
 	case 1: // Vivid: richer color, a touch more contrast
 		*r = contrast(*r, 1.08f);
 		*g = contrast(*g, 1.08f);
@@ -1197,6 +1259,116 @@ static void feedback(u16 *img, int w, int h)
 	free(src);
 }
 
+// Deep Fried: oversharpened, grainy, in coarse blocks like a JPEG saved
+// a hundred times.
+static void fried(u16 *img, int w, int h)
+{
+	u16 *src = malloc(w * h * sizeof(u16));
+	if (!src)
+		return;
+	memcpy(src, img, w * h * sizeof(u16));
+	for (int y = 1; y < h - 1; y++)
+		for (int x = 1; x < w - 1; x++)
+		{
+			int i = y * w + x;
+			u16 c = src[i], l = src[i - 1], r = src[i + 1], u = src[i - w], d = src[i + w];
+			u32 n = (u32)(x * 640 / w) * 73856093u ^ (u32)(y * 480 / h) * 19349663u;
+			n = (n ^ n >> 13) * 1274126177u;
+			int grain = (int)(n >> 29) - 4;
+			int rr = 3 * R5(c) - (R5(l) + R5(r) + R5(u) + R5(d)) / 2 + grain;
+			int gg = 3 * G6(c) - (G6(l) + G6(r) + G6(u) + G6(d)) / 2 + grain * 2;
+			int bb = 3 * B5(c) - (B5(l) + B5(r) + B5(u) + B5(d)) / 2 + grain;
+			img[i] = RGB(clampi(rr, 0, 31), clampi(gg, 0, 63), clampi(bb, 0, 31));
+		}
+	free(src);
+	compress(img, w, h, &(u32){0xF41ED});
+}
+
+// Kaleido: the top-left quarter, mirrored into the other three.
+static void kaleido(u16 *img, int w, int h, bool down)
+{
+	for (int y = 0; y < h; y++)
+		for (int x = w / 2; x < w; x++)
+			img[y * w + x] = img[y * w + w - 1 - x];
+	if (down)
+		for (int y = h / 2; y < h; y++)
+			memcpy(img + y * w, img + (h - 1 - y) * w, w * sizeof(u16));
+}
+
+// Shatter: shards of the picture pushed out of place, with light edges.
+static void shatter(u16 *img, int w, int h, u32 *s)
+{
+	u16 *src = malloc(w * h * sizeof(u16));
+	if (!src)
+		return;
+	memcpy(src, img, w * h * sizeof(u16));
+	for (int k = 0; k < 16; k++)
+	{
+		int sw = w / 8 + rnd(s, w / 4), sh = h / 10 + rnd(s, h / 4), x0 = rnd(s, w - sw), y0 = rnd(s, h - sh);
+		int dx = rnd(s, w / 8) - w / 16, dy = rnd(s, h / 10) - h / 20;
+		for (int y = y0; y < y0 + sh; y++)
+			for (int x = x0; x < x0 + sw; x++)
+			{
+				u16 p = src[clampi(y + dy, 0, h - 1) * w + clampi(x + dx, 0, w - 1)];
+				if (y == y0 || x == x0)
+					p = blendPx(p, 0xFFFF);
+				img[y * w + x] = p;
+			}
+	}
+	free(src);
+}
+
+// Droste: the picture inside itself, smaller and smaller toward the middle.
+static void droste(u16 *img, int w, int h)
+{
+	u16 *src = malloc(w * h * sizeof(u16));
+	if (!src)
+		return;
+	memcpy(src, img, w * h * sizeof(u16));
+	const float inner = 0.55f;
+	for (int y = 0; y < h; y++)
+		for (int x = 0; x < w; x++)
+		{
+			float u = (x - w / 2.0f) / (w / 2.0f), v = (y - h / 2.0f) / (h / 2.0f);
+			int level = 0;
+			while (level < 5 && fabsf(u) < inner && fabsf(v) < inner)
+			{
+				u /= inner;
+				v /= inner;
+				level++;
+			}
+			if (!level)
+				continue;
+			u16 p = src[clampi((int)(h / 2.0f + v * h / 2), 0, h - 1) * w + clampi((int)(w / 2.0f + u * w / 2), 0, w - 1)];
+			// A thin dark frame around each copy.
+			float m = fabsf(u) > fabsf(v) ? fabsf(u) : fabsf(v);
+			img[y * w + x] = m > 0.97f ? darkenPx(p, 60) : p;
+		}
+	free(src);
+}
+
+// Scramble: tiles of a grid swapped around.
+static void scramble(u16 *img, int w, int h, u32 *s)
+{
+	enum { COLS = 8, ROWS = 6 };
+	int tw = w / COLS, th = h / ROWS;
+	u16 tmp[MAXDIM];
+	for (int k = 0; k < 14; k++)
+	{
+		int a = rnd(s, COLS * ROWS), b = rnd(s, COLS * ROWS);
+		int ax = a % COLS * tw, ay = a / COLS * th, bx = b % COLS * tw, by = b / COLS * th;
+		if (a == b)
+			continue;
+		for (int y = 0; y < th; y++)
+		{
+			u16 *ra = img + (ay + y) * w + ax, *rb = img + (by + y) * w + bx;
+			memcpy(tmp, ra, tw * sizeof(u16));
+			memcpy(ra, rb, tw * sizeof(u16));
+			memcpy(rb, tmp, tw * sizeof(u16));
+		}
+	}
+}
+
 void filterGlitch(u16 *img, int w, int h, int filter, int frame)
 {
 	if (!filterHasGlitch(filter) || w > MAXDIM || h > MAXDIM)
@@ -1411,7 +1583,51 @@ void filterGlitch(u16 *img, int w, int h, int filter, int frame)
 	case G_FEEDBACK:
 		feedback(img, w, h);
 		break;
+	case G_FRIED:
+		fried(img, w, h);
+		break;
+	case G_KALEIDO:
+		kaleido(img, w, h, true);
+		break;
+	case G_MIRROR:
+		kaleido(img, w, h, false);
+		break;
+	case G_SLIT: // rows slip along a wave that grows toward the bottom
+	{
+		float phase = (frame & 7) * 0.785f;
+		for (int y = 0; y < h; y++)
+		{
+			float v = (float)y / h;
+			shiftRowWrap(img + y * w, w, (int)(sinf(v * 9 + phase) * v * w / 6));
+		}
+		break;
+	}
+	case G_SHATTER:
+		shatter(img, w, h, s);
+		break;
+	case G_DISCO: // the channels change places every frame, stripes of it
+	{
+		int turn = (frame + 1) % 3, band = maxi(4, h / 12);
+		for (int y = 0; y < h; y++)
+		{
+			int t = (turn + y / band) % 3;
+			for (int x = 0; x < w; x++)
+			{
+				u16 p = img[y * w + x];
+				int r = R5(p), g = G6(p) >> 1, b = B5(p);
+				img[y * w + x] = t == 0 ? RGB(g, b << 1, r) : t == 1 ? RGB(b, r << 1, g) : RGB(31 - r, g << 1, 31 - b);
+			}
+		}
+		break;
+	}
+	case G_DROSTE:
+		droste(img, w, h);
+		break;
+	case G_SCRAMBLE:
+		scramble(img, w, h, s);
+		break;
 	case G_ANAGLYPH: // red to the left, cyan to the right, like 3D glasses
+
 	{
 		u16 tmp[MAXDIM];
 		int d = maxi(3, w / 40);

@@ -2,7 +2,7 @@
 
 [English](README.md) · **Deutsch**
 
-Retro-Foto- und Wiggle-Workstation für den New 3DS (XL). Sie nimmt mit beiden Außenkameras ein 3D-Foto auf und macht daraus ein Wigglegram-GIF, eine kleine Kamerafahrt wie bei den Nimslo- und Nishika-Kameras mit mehreren Linsen. Dazu kommen normale Fotos, Selfies, ein Nachtmodus und 68 Filter von Classic über Datamosh bis Circuit Bending.
+Retro-Foto- und Wiggle-Workstation für den New 3DS (XL). Sie nimmt mit beiden Außenkameras ein 3D-Foto auf und macht daraus ein Wigglegram-GIF, eine kleine Kamerafahrt wie bei den Nimslo- und Nishika-Kameras mit mehreren Linsen. Dazu kommen normale Fotos, Selfies, automatische Belichtung, ein automatischer Nachtmodus und 81 Filter von Classic über Datamosh bis Circuit Bending.
 
 ## Installieren
 
@@ -16,9 +16,10 @@ Oder lad `Wiggle3DS.cia` vom [neuesten Release](https://github.com/tj537/Wiggle3
 
 - **Wigglegrams:** Beide Außenkameras lösen gleichzeitig aus, du tippst auf dein Motiv, und die App macht ein wackelndes GIF, das sich um diesen Punkt dreht. Übergänge: Hard cut, Smooth, Extra smooth.
 - **Normale Fotos:** Steht die Transition auf **Off**, wird die Aufnahme ein normales Foto (JPG). Beide Kamerabilder bleiben gespeichert, beim Bearbeiten machst du aus einem Foto jederzeit wieder ein Wiggle und umgekehrt.
-- **68 Filter in Gruppen:** Classic, Color, RGB & Ghost, Tape & Screen, Data Mosh, Circuit Bending, Print & Pixel, Warp. Im Filtermenü zeigt jeder Filter eine Live-Vorschau deines Sucherbilds, mit X markierst du Favoriten, die stehen dann ganz oben. Die Glitch-Filter verändern das Bild selbst (RGB Split, VHS, Datamosh, Pixel Sort, Melt, Keyframe …), viele davon bewegen sich. Im GIF sind das zwei Wiggle-Durchläufe mit eigenem Muster, und genau die zeigt auch die Vorschau beim Bearbeiten.
+- **81 Filter in Gruppen:** Classic, Color, RGB & Ghost, Tape & Screen, Data Mosh, Circuit Bending, Print & Pixel, Warp, Chaos (Deep Fried, Disco, Slit Scan, Kaleido, Droste, Shatter, Toxic, Hellfire, X-Ray …). Im Filtermenü zeigt jeder Filter eine Live-Vorschau deines Sucherbilds, mit X markierst du Favoriten, die haben einen eigenen Tab (All / ★ Favs, oder SELECT). „Original“ oben bringt dich von überall in der Liste zurück zu ohne Filter. Die Glitch-Filter verändern das Bild selbst (RGB Split, VHS, Datamosh, Pixel Sort, Melt, Keyframe …), viele davon bewegen sich. Im GIF sind das zwei Wiggle-Durchläufe mit eigenem Muster, und genau die zeigt auch die Vorschau beim Bearbeiten.
 - **Filterstärke:** jeder Filter von 0 bis 100 %, mit L und R in Schritten von 10 %.
-- **Nachtmodus:** längere Belichtung, und vier Bilder werden zu einem gemittelt, das rauscht deutlich weniger. Bewegte Stellen bleiben vom ersten Bild, so gibt es keine Geisterbilder.
+- **Automatische Belichtung und Weißabgleich:** jedes Foto bekommt eine Tonkurve und einen Weißabgleich für beide Augen: Mitteltöne Richtung Mittelgrau, eine weiche Schulter, damit Lampen und Himmel nicht ausfressen, Farben großteils Richtung neutral (nur ein Stupser, wenn nichts im Bild grau ist, etwa Wiese unter blauem Himmel).
+- **Nachtmodus, automatisch:** bleibt der Sucher dunkel, schaltet die Kamera selbst auf lange Belichtung (oben links erscheint ein Mond), und jedes Foto mittelt vier Bilder zu einem, das rauscht deutlich weniger. Bewegte Stellen bleiben vom ersten Bild, so gibt es keine Geisterbilder. Mit genug Licht geht er von selbst wieder aus; „Auto night“ in den Einstellungen schaltet ihn ganz ab.
 - **Selfie:** die Innenkamera, gespiegelt, für normale Fotos.
 - **Sauberes 3D:** Beide Sensoren sind synchronisiert, Helligkeit und Farbe des rechten Auges werden ans linke angeglichen, damit das GIF nicht flackert.
 - **Galerie:** drei Reihen, die seitwärts scrollen, Mehrfachauswahl per Gedrückthalten, Löschen mit Rückgängig.
@@ -35,14 +36,13 @@ Oben läuft der Sucher, unten sind deine Standards und die letzten Bilder.
 
 - **A, L, R, ZL oder ZR:** auslösen
 - **Y:** Filterauswahl. Antippen zeigt den Filter sofort im Sucher, nochmal Antippen oder A übernimmt ihn, L R stellt die Stärke ein, X macht ihn zum Favoriten.
-- **X:** Nachtmodus an oder aus
 - **B oder „All“:** Galerie
 - **▶:** zu den letzten Bildern, dort wählst du mit ◀ ▶ und öffnest mit A
-- **▼:** alle Standards zurücksetzen (Filter, Stärke, Transition, Speed, Quick capture, Nacht, Selfie). Das geht auch mit dem Button oben links und in den Einstellungen unter „Capture defaults“.
+- **▼:** alle Standards zurücksetzen (Filter, Stärke, Transition, Speed, Quick capture, Selfie). Das geht auch mit dem Button oben links und in den Einstellungen unter „Capture defaults“.
 - **SELECT:** aufs Handy teilen
 - **START:** beenden
 
-Die Buttons oben, von links: Zurücksetzen auf die Standards, Selfie, Nachtmodus, Share, Einstellungen. Die LED links zeigt den Akku: grün, orange oder rot, mit Ring beim Laden.
+Die Buttons oben, von links: Zurücksetzen auf die Standards, Selfie, Share, Einstellungen. Die LED links zeigt den Akku: grün, orange oder rot, mit Ring beim Laden, daneben ein Mond, solange der Auto-Nachtmodus läuft.
 
 Die Kacheln darunter sind die Standards für neue Aufnahmen: Filter, Transition (Off heißt Foto), Speed und Quick capture. Mit Quick capture wird jede Aufnahme sofort gespeichert, ohne vorher den Bearbeiten-Screen zu öffnen.
 

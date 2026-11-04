@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdlib.h>
 #include "camera.h"
 #include "develop.h"
@@ -141,5 +142,106 @@ void matchEyes(const u16 *left, u16 *right)
 	{
 		u16 p = right[i];
 		right[i] = lut[0][p >> 11] << 11 | lut[1][p >> 5 & 63] << 5 | lut[2][p & 31];
+	}
+}
+
+static int luma8(u16 p) { return (77 * ((p >> 11) << 3) + 150 * ((p >> 5 & 63) << 2) + 29 * ((p & 31) << 3)) >> 8; }
+
+int meterLuma(const u16 *img)
+{
+	u32 sum = 0, n = 0;
+	for (int y = 8; y < CAM_H; y += 16)
+		for (int x = 8; x < CAM_W; x += 16, n++)
+			sum += luma8(img[y * CAM_W + x]);
+	return n ? (int)(sum / n) : 0;
+}
+
+static float clampf(float v, float lo, float hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+// Brightness 0..255 at a fraction of the histogram, from the dark end.
+static int percentile(const u32 *hist, u32 total, float at)
+{
+	u32 want = (u32)(total * at), acc = 0;
+	for (int v = 0; v < 256; v++)
+		if ((acc += hist[v]) > want)
+			return v;
+	return 255;
+}
+
+void autoDevelop(u16 *left, u16 *right, bool night)
+{
+	// White balance: means of the near-neutral midtones; all midtones when
+	// too few are neutral (a red wall, a green lawn).
+	u32 hist[256] = {0}, total = 0;
+	u64 neutral[3] = {0}, all[3] = {0};
+	u32 nNeutral = 0, nAll = 0;
+	for (int y = 2; y < CAM_H; y += 4)
+		for (int x = 2; x < CAM_W; x += 4)
+		{
+			u16 p = left[y * CAM_W + x];
+			int r = (p >> 11) << 3, g = (p >> 5 & 63) << 2, b = (p & 31) << 3, l = luma8(p);
+			hist[l]++;
+			total++;
+			if (l < 24 || l > 232)
+				continue;
+			int hi = r > g ? (r > b ? r : b) : (g > b ? g : b), lo = r < g ? (r < b ? r : b) : (g < b ? g : b);
+			all[0] += r, all[1] += g, all[2] += b, nAll++;
+			if ((hi - lo) * 100 < hi * 30)
+				neutral[0] += r, neutral[1] += g, neutral[2] += b, nNeutral++;
+		}
+	if (!nAll)
+		return; // black or white all over: nothing to go by
+	bool sure = nNeutral * 20 >= nAll;
+	const u64 *m = sure ? neutral : all;
+	float wb[3] = {1, 1, 1};
+	if (m[0] && m[2])
+	{
+		// 70 % of the way to gray (in log terms): sunsets and lamps keep some
+		// of their glow. Without neutral pixels the colors may just be the
+		// scene's own (grass, sky), so only a nudge.
+		float k = sure ? 0.7f : 0.3f, lo = sure ? 0.7f : 0.88f, hi = sure ? 1.5f : 1.15f;
+		wb[0] = clampf(powf((float)m[1] / m[0], k), lo, hi);
+		wb[2] = clampf(powf((float)m[1] / m[2], k), lo, hi);
+	}
+
+
+	// Exposure: the median toward middle gray, unless the highlights would
+	// go far past white; the shoulder takes the rest.
+	int black = percentile(hist, total, 0.005f), median = percentile(hist, total, 0.5f), top = percentile(hist, total, 0.99f);
+	black = black > 20 ? 14 : black * 7 / 10; // lifts haze, keeps the shadows' depth
+	float gain = clampf(112.0f / (median > 4 ? median : 4), 0.8f, night ? 3.0f : 2.2f);
+	float roof = 300.0f / (top > 1 ? top : 1);
+	if (gain > 1 && gain > roof)
+		gain = roof > 1 ? roof : 1;
+	if (gain < 1 && median < 150)
+		gain = 1; // only darkens what is clearly too bright
+
+	// One table per channel, in 1/16 steps for the dither.
+	static const int maxv[3] = {31, 63, 31};
+	u16 lut[3][64];
+	bool flat = gain > 0.98f && gain < 1.02f && black < 3 && fabsf(wb[0] - 1) < 0.03f && fabsf(wb[2] - 1) < 0.03f;
+	if (flat)
+		return;
+	for (int c = 0; c < 3; c++)
+		for (int v = 0; v <= maxv[c]; v++)
+		{
+			float x = (v * 255.0f / maxv[c] * wb[c] - black) / (255 - black) * gain;
+			const float knee = 0.75f;
+			if (x > knee)
+				x = knee + (1 - knee) * (1 - expf(-(x - knee) / (1 - knee)));
+			lut[c][v] = (u16)(clampf(x, 0, 1) * maxv[c] * 16 + 0.5f);
+		}
+	u16 *imgs[2] = {left, right};
+	for (int e = 0; e < (right && right != left ? 2 : 1); e++)
+	{
+		u16 *img = imgs[e];
+		for (int y = 0, i = 0; y < CAM_H; y++)
+			for (int x = 0; x < CAM_W; x++, i++)
+			{
+				u16 p = img[i];
+				int d = bayer4[(y & 3) * 4 + (x & 3)];
+				int r = (lut[0][p >> 11] + d) >> 4, g = (lut[1][p >> 5 & 63] + d) >> 4, b = (lut[2][p & 31] + d) >> 4;
+				img[i] = (r > 31 ? 31 : r) << 11 | (g > 63 ? 63 : g) << 5 | (b > 31 ? 31 : b);
+			}
 	}
 }

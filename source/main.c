@@ -132,7 +132,7 @@ static void checkStatus(void)
 static void loadSettings(void)
 {
 	Settings *st = &app.settings;
-	*st = (Settings){.theme = 0, .filter = 0, .smooth = 0, .delayMs = 120, .quick = false, .timer = 0, .grid = false, .autoplay = true, .gifHalf = false, .fps = 20, .flash = true, .sound = true, .photoEye = 1, .strength = 100};
+	*st = (Settings){.theme = 0, .filter = 0, .smooth = 0, .delayMs = 120, .quick = false, .timer = 0, .grid = false, .autoplay = true, .gifHalf = false, .fps = 20, .flash = true, .sound = true, .photoEye = 1, .strength = 100, .night = true};
 	FILE *f = fopen(SETTINGS_PATH, "r");
 	if (!f)
 		return;
@@ -151,7 +151,7 @@ static void loadSettings(void)
 		else if (!strcmp(key, "gif_half")) st->gifHalf = v;
 		else if (!strcmp(key, "fps") && (v == 15 || v == 20 || v == 30)) st->fps = v;
 		else if (!strcmp(key, "flash")) st->flash = v;
-		else if (!strcmp(key, "night")) st->night = v;
+		else if (!strcmp(key, "auto_night")) st->night = v;
 		else if (!strcmp(key, "wiggle") && !v) st->smooth = SMOOTH_OFF; // from the earlier switch
 		else if (!strcmp(key, "photo_eye")) st->photoEye = v ? 1 : 0;
 		else if (!strcmp(key, "strength") && v >= 0 && v <= 100) st->strength = v;
@@ -174,7 +174,7 @@ static void saveSettings(void)
 	fprintf(f, "photo_eye=%d\nstrength=%d\n", st->photoEye, st->strength);
 	for (int i = 0; i < 3; i++)
 		fprintf(f, "fav%d=%d\n", i, (int)st->favorites[i]);
-	fprintf(f, "night=%d\nsound=%d\ngif_square=%d\ntip_done=%d\n", st->night, st->sound, st->gifSquare, st->tipDone);
+	fprintf(f, "auto_night=%d\nsound=%d\ngif_square=%d\ntip_done=%d\n", st->night, st->sound, st->gifSquare, st->tipDone);
 	fclose(f);
 }
 
@@ -237,6 +237,14 @@ static void changeSetting(int row, int step)
 	case SET_GIF_SHAPE:
 		st->gifSquare = !st->gifSquare;
 		exportSetSquare(st->gifSquare);
+		break;
+	case SET_NIGHT:
+		st->night = !st->night;
+		if (!st->night && app.night)
+		{
+			app.night = false;
+			camSetNight(false);
+		}
 		break;
 	}
 	topDirty = true;
@@ -472,12 +480,13 @@ static void capture(void)
 	memcpy(shotR, camRight(), sizeof(shotR));
 	if (app.settings.sound)
 		soundShutter();
-	if (app.settings.night)
+	if (app.night)
 		stackNight();
 	if (app.settings.flash)
 		app.flashAt = osGetTime(); // after the extra frames, which want a clear view
 	if (!app.selfie) // a selfie has one image in both eyes
 		matchEyes(shotL, shotR);
+	autoDevelop(shotL, shotR, app.night);
 	wiggleSetImages(shotL, shotR);
 	app.shotNum = -1;
 	app.pivotX = CAM_W / 2;
@@ -932,19 +941,49 @@ static void updateGallery(u32 down)
 
 // ---- home ----
 
+static bool isFavorite(int f) { return app.settings.favorites[f / 32] >> (f % 32) & 1; }
+
+// The menu opens on the tab it was left on, if the current filter is there.
+static void setMenuTab(bool favs)
+{
+	app.menuFavs = favs;
+	uiMenuSetFavs(favs);
+	app.menuScroll = 0;
+	if (favs && !isFavorite(app.menuSel) && uiMenuFirst() >= 0)
+		app.menuSel = uiMenuFirst();
+	uiMenuReveal(&app);
+}
+
 static void openFilterMenu(void)
 {
 	app.filterMenu = true;
 	app.menuSel = app.settings.filter;
-	app.menuScroll = 0;
-	uiMenuReveal(&app);
+	setMenuTab(app.menuFavs && isFavorite(app.settings.filter));
 }
 
 static void updateFilterMenu(u32 down)
 {
 	static int dragY, dragScroll;
 	static bool dragged;
+	int head = released && uiMenuHeaderAt(startX, startY) == uiMenuHeaderAt(touchX, touchY) ? uiMenuHeaderAt(touchX, touchY) : -1;
+	if (head == MH_ORIGINAL)
+	{
+		// Straight back to no filter, from anywhere in the list.
+		app.menuSel = app.settings.filter = 0;
+		app.filterMenu = false;
+		saveSettings();
+		showToast(false, "Original");
+		return;
+	}
+	if ((down & KEY_SELECT) || (head >= 0 && (head == MH_FAVS) != app.menuFavs))
+	{
+		setMenuTab(!app.menuFavs);
+		return;
+	}
+	if (head >= 0 || (touching && uiMenuHeaderAt(startX, startY) >= 0))
+		return;
 	int sel = app.menuSel;
+
 	if (down & KEY_X)
 	{
 		// Favorite on or off; favorites are listed first.
@@ -1014,8 +1053,6 @@ static void resetDefaults(void)
 	st->smooth = 0;
 	st->delayMs = 120;
 	st->quick = false;
-	st->night = false;
-	camSetNight(false);
 	if (app.selfie)
 	{
 		app.selfie = false;
@@ -1050,6 +1087,47 @@ static bool updateRecentFocus(u32 down)
 	return true;
 }
 
+// Auto night: when the live view stays dark, the camera goes to long
+// exposures (down to 5 fps) and shots stack several frames against the
+// noise. It goes back once frames come near full speed again, which the
+// camera only does with light to spare; then it waits a while before it
+// goes dark again, so a black wall doesn't flip it back and forth.
+#define NIGHT_ENTER_LUMA 46
+#define NIGHT_EXIT_MS 75 // smoothed frame time; 15 fps is 67 ms
+#define NIGHT_DWELL_MS 1500
+#define NIGHT_COOLDOWN_MS 8000
+static void autoNight(void)
+{
+	static u64 lastFrame, since, leftAt;
+	static int frameMs = 50;
+	u64 now = osGetTime();
+	int dt = lastFrame ? (int)(now - lastFrame) : 0;
+	lastFrame = now;
+	if (dt <= 0 || dt > 1000) // the first frame after a pause
+	{
+		since = 0;
+		return;
+	}
+	frameMs += (dt - frameMs) / 4;
+	bool want = app.night ? frameMs > NIGHT_EXIT_MS : meterLuma(app.liveL) < NIGHT_ENTER_LUMA && now - leftAt > NIGHT_COOLDOWN_MS;
+	if (!app.settings.night || want == app.night)
+	{
+		since = 0;
+		return;
+	}
+	if (!since)
+		since = now;
+	if (now - since < NIGHT_DWELL_MS)
+		return;
+	app.night = want;
+	camSetNight(want);
+	if (!want)
+		leftAt = now;
+	since = lastFrame = 0;
+	frameMs = 50;
+	bottomDirty = true;
+}
+
 static void updateHome(u32 down)
 {
 	if (checkUndo(down))
@@ -1058,6 +1136,7 @@ static void updateHome(u32 down)
 	{
 		app.liveL = camLeft();
 		app.liveR = camRight();
+		autoNight();
 		topDirty = true;
 		if (app.filterMenu) // its tiles show the live view
 			bottomDirty = true;
@@ -1137,14 +1216,6 @@ static void updateHome(u32 down)
 		showToast(false, app.selfie ? "Selfie · plain photos" : "Back to 3D");
 		return;
 	}
-	if ((down & KEY_X) || header == HB_NIGHT)
-	{
-		app.settings.night = !app.settings.night;
-		camSetNight(app.settings.night);
-		saveSettings();
-		showToast(false, app.settings.night ? "Night mode · hold still" : "Night mode off");
-		return;
-	}
 
 	if (released)
 	{
@@ -1220,7 +1291,6 @@ int main(void)
 	if (app.camOk)
 	{
 		camSetFps(app.settings.fps);
-		camSetNight(app.settings.night);
 		camResume();
 		app.liveL = camLeft();
 		app.liveR = camRight();

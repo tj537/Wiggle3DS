@@ -100,15 +100,19 @@ int main(int argc, char **argv)
 	}
 	for (int i = 0; i < THUMB_CACHE; i++)
 		app.gridInfo[i].style = SHOT_STYLE(i % FILTER_COUNT, 1, 100);
-	app.settings.night = true;
+	app.night = true;
 	app.settings.smooth = SMOOTH_OFF;
 	app.stacking = 2;
 	app.stackFrames = 4;
 	render(dir, "home");
 	app.stacking = 0;
-	app.settings.night = false;
+	app.night = false;
 	app.settings.smooth = 1;
 	render(dir, "home_wiggle");
+	app.settings.filter = 41;
+	app.settings.strength = 50;
+	render(dir, "home_long");
+	app.settings.filter = 4;
 	app.settings.strength = 100;
 	app.filterMenu = true;
 	app.menuSel = 53;
@@ -118,6 +122,14 @@ int main(int argc, char **argv)
 	app.menuScroll = 0;
 	uiMenuReveal(&app);
 	render(dir, "filter_menu");
+	uiMenuSetFavs(true);
+	app.menuScroll = 0;
+	render(dir, "filter_favs");
+	uiMenuSetFavs(false);
+	app.menuSel = 76;
+	uiMenuReveal(&app);
+	render(dir, "filter_chaos");
+
 	for (int f = 11; f < FILTER_COUNT; f++)
 	{
 		app.menuSel = f;
